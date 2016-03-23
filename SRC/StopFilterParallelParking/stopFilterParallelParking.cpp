@@ -1,0 +1,661 @@
+/*
+ * Date 17.03.16
+ */
+ 
+
+#include <math.h>
+#include "stdafx.h"
+#include "stopFilterParallelParking.h"
+#include <fstream>
+
+#define MIN_SPEED 0.4
+#define MIDDLE_SPEED 0.6
+#define LENGHT_PARALLEL_SPOT 0.7653
+
+// seitliche Distanz zum Auto in der Parkluecke
+#define DIST_TO_CAR 0.4
+
+#define OFFSET_PARALLEL (LENGHT_PARALLEL_SPOT + 0.79)
+
+// Mitte der Luecke +- TEST_AREA Bereich für seitlichen Sensortest
+#define TEST_AREA 0.20
+#define SPOT_TOL 0.1
+
+// shut down car if no new spot has been found after driving this distance
+#define DRIVE_AROUND_DISTANCE 2.0
+#define DRIVE_AROUND_SPEED 0.8
+
+// unbedingt hoch lassen!!
+#define MAX_WAITING_TIME 10.0
+
+#define GOOD_COUNT_PERCENTAGE 0.7
+
+
+ADTF_FILTER_PLUGIN("Stop Filter for Parallel Parking", OID_STOP_FILTER_PARALLEL_PARKING, cStopFilterParallelParking);
+
+
+cStopFilterParallelParking::cStopFilterParallelParking(const tChar* __info):cFilter(__info)
+{
+
+}
+
+cStopFilterParallelParking::~cStopFilterParallelParking()
+{
+
+}
+
+tResult cStopFilterParallelParking::Init(tInitStage eStage, __exception)
+{
+    // never miss calling the parent implementation!!
+    RETURN_IF_FAILED(cFilter::Init(eStage, __exception_ptr))
+    
+    // in StageFirst you can create and register your static pins.
+    if (eStage == StageFirst)
+    {	
+		cObjectPtr<IMediaDescriptionManager> pDescManager;
+ 		RETURN_IF_FAILED(_runtime->GetObject(OID_ADTF_MEDIA_DESCRIPTION_MANAGER,
+                                             	IID_ADTF_MEDIA_DESCRIPTION_MANAGER,
+                                             	(tVoid**)&pDescManager,
+                                             	__exception_ptr));
+
+
+
+	
+        //get description for sensor data pins
+        tChar const * strDescSignalValue = pDescManager->GetMediaDescription("tSignalValue");	
+        RETURN_IF_POINTER_NULL(strDescSignalValue);	
+        //get mediatype for ultrasonic sensor data pins
+        cObjectPtr<IMediaType> pTypeSignalValue = new cMediaType(0, 0, 0, "tSignalValue", strDescSignalValue, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+
+        // MediaDescription of StopFilter-Struct
+        tChar const* strDescStopStruct = pDescManager->GetMediaDescription("tStopStruct");
+        RETURN_IF_POINTER_NULL(strDescStopStruct);
+        cObjectPtr<IMediaType> pTypeStopStruct = new cMediaType(0, 0, 0, "tStopStruct", strDescStopStruct, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+
+        // Get description for bool values
+        tChar const * strDescBoolSignalValue = pDescManager->GetMediaDescription("tBoolSignalValue");
+        RETURN_IF_POINTER_NULL(strDescBoolSignalValue);
+        cObjectPtr<IMediaType> pTypeBoolSignalValue = new cMediaType(0, 0, 0, "tBoolSignalValue", strDescBoolSignalValue, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+		
+        // Media Description LaneTracking Velocity
+        tChar const * LTVelocityDescValue = pDescManager->GetMediaDescription("tLTVelocityValue");
+        RETURN_IF_POINTER_NULL(LTVelocityDescValue);
+        cObjectPtr<IMediaType> pTypeLTVelocityValue = new cMediaType(0, 0, 0, "tLTVelocityValue", LTVelocityDescValue, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+
+		// Media Description ParkingID
+		tChar const * ParkingDesc = pDescManager->GetMediaDescription("tParkingStruct");
+		RETURN_IF_POINTER_NULL(ParkingDesc);
+		cObjectPtr<IMediaType> pTypeParkingDesc = new cMediaType(0, 0, 0, "tParkingStruct", ParkingDesc, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+		
+
+		// DistanceInput
+		RETURN_IF_FAILED(m_iDistance.Create("Distance_overall", pTypeSignalValue, static_cast<IPinEventSink*> (this)));
+        RETURN_IF_FAILED(RegisterPin(&m_iDistance));
+
+        // DistanceInput
+		RETURN_IF_FAILED(m_iDistanceSpot.Create("Distance_spot", pTypeSignalValue, static_cast<IPinEventSink*> (this)));
+        RETURN_IF_FAILED(RegisterPin(&m_iDistanceSpot));
+
+		// StopFilter Structure
+		RETURN_IF_FAILED(m_iStopStruct.Create("StopStruct", pTypeStopStruct, static_cast <IPinEventSink*> (this)));
+		RETURN_IF_FAILED(RegisterPin(&m_iStopStruct));
+
+        // US rear middle
+		RETURN_IF_FAILED(m_iUltraSonicBack.Create("Sensor_middle_rear", pTypeSignalValue, static_cast <IPinEventSink*> (this)));
+		RETURN_IF_FAILED(RegisterPin(&m_iUltraSonicBack));
+
+        // US right (side)
+		RETURN_IF_FAILED(m_iUltraSonicRight.Create("Sensor_right", pTypeSignalValue, static_cast <IPinEventSink*> (this)));
+		RETURN_IF_FAILED(RegisterPin(&m_iUltraSonicRight));
+
+
+		// VelocityOutput
+		RETURN_IF_FAILED(m_oVelocity.Create("Velocity_LT", pTypeLTVelocityValue, static_cast<IPinEventSink*> (this)));
+        RETURN_IF_FAILED(RegisterPin(&m_oVelocity));
+		
+        //create output pin for finish parking output data
+        RETURN_IF_FAILED(m_oFinishStoppingOutput.Create("finish_Stopping", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));
+        RETURN_IF_FAILED(RegisterPin(&m_oFinishStoppingOutput));
+
+        //create output pin for finish parking output data
+        RETURN_IF_FAILED(m_oShutDownOutput.Create("shut_down", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));
+        RETURN_IF_FAILED(RegisterPin(&m_oShutDownOutput));
+		
+        // Stop LaneTracking Output
+        RETURN_IF_FAILED(m_oStopLF.Create("Stop_LF", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));	
+        RETURN_IF_FAILED(RegisterPin(&m_oStopLF));	
+
+        // Stop EmergencySTOP Output
+        RETURN_IF_FAILED(m_oStopES.Create("Stop_ES", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));
+        RETURN_IF_FAILED(RegisterPin(&m_oStopES));
+
+        //create output pin for right light
+        RETURN_IF_FAILED(m_oTurnRightOutput.Create("right_light", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));	
+        RETURN_IF_FAILED(RegisterPin(&m_oTurnRightOutput));
+
+		//create output pin for nextSpotFree
+        RETURN_IF_FAILED(m_oNextSpotFree.Create("next_spot_is_free", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));	
+        RETURN_IF_FAILED(RegisterPin(&m_oNextSpotFree));
+
+		// stop search for ParkingSpot (Output)
+		RETURN_IF_FAILED(m_oStopSearchParkingSpot.Create("StopSearchParkingSpot", pTypeParkingDesc, static_cast<IPinEventSink*> (this)));
+		RETURN_IF_FAILED(RegisterPin(&m_oStopSearchParkingSpot));
+		RETURN_IF_FAILED(pTypeParkingDesc->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pStopSearchParkingSpotOutput));
+
+
+        RETURN_IF_FAILED(pTypeSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pDistanceInput));
+        RETURN_IF_FAILED(pTypeSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pUSRightInput));
+        RETURN_IF_FAILED(pTypeSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pUSBackInput));
+        RETURN_IF_FAILED(pTypeSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pDistanceSpotInput));
+        RETURN_IF_FAILED(pTypeLTVelocityValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pVelocityOutput));
+        RETURN_IF_FAILED(pTypeStopStruct->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pStopStructInput));
+        RETURN_IF_FAILED(pTypeBoolSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pDescriptionBool));
+
+    }
+    else if (eStage == StageNormal)
+    {
+
+    }
+    else if (eStage == StageGraphReady)
+    {
+		// ID not set yet
+		m_pStopStructInputSet 	= tFalse;
+		m_bIDsBoolValueOutput 	= tFalse;
+		m_bIDsDistanceSet       = tFalse;
+		m_bIDsDistanceSpotSet   = tFalse;
+		m_bIDsVelocityOutput	= tFalse;
+		m_bIDsUSBackSet         = tFalse;
+		m_bIDsUSRightSet        = tFalse;
+		m_bStopSearchParkingSpotOutputSet 	= tFalse;
+		SetToInitialState();
+    }
+
+    RETURN_NOERROR;
+}
+
+tResult cStopFilterParallelParking::Shutdown(tInitStage eStage, __exception)
+{
+   
+    if (eStage == StageGraphReady)
+    {
+    }
+    else if (eStage == StageNormal)
+    {
+    }
+    else if (eStage == StageFirst)
+    {
+    }
+
+    return cFilter::Shutdown(eStage, __exception_ptr);
+}
+
+tResult cStopFilterParallelParking::OnPinEvent(IPin* pSource,
+                                           tInt nEventCode,
+                                           tInt nParam1,
+                                           tInt nParam2,
+                                           IMediaSample* pMediaSample)
+{
+    if (nEventCode == IPinEventSink::PE_MediaSampleReceived)
+    {
+        RETURN_IF_POINTER_NULL(pMediaSample);
+
+        if (pSource == &m_iStopStruct){
+                ProcessStopStruct(pMediaSample);
+        } else if (pSource == &m_iDistance && m_stopActive && !m_startParking){
+                ProcessSpeed(pMediaSample);
+        } else if (pSource == &m_iDistanceSpot && m_stopActive && !m_startParking){
+                ProcessSpotDistance(pMediaSample);
+        } else if (pSource == &m_iUltraSonicRight && m_checkSpot){
+                ProcessUltrasonicRightInput(pMediaSample);
+        } else if (pSource == &m_iUltraSonicBack && m_stopActive && (m_distanceZero + m_offsetSpot - m_drivenDistance < 0.05)) {
+                ProcessUltrasonicBackInput(pMediaSample);
+		}
+	}
+
+    RETURN_NOERROR;
+}
+
+tResult cStopFilterParallelParking::ProcessStopStruct(IMediaSample* pMediaSample){
+	tBool filterActive = m_stopActive;
+	
+	{
+		__adtf_sample_read_lock_mediadescription(m_pStopStructInput, pMediaSample, pCoder);
+
+		if (!m_pStopStructInputSet){
+			pCoder->GetID("fVelocity", m_szIDVelocityStructInput);
+			pCoder->GetID("fDistance", m_szIDDistanceStructInput);
+			pCoder->GetID("bStart", m_szIDBoolStructInput);
+			m_pStopStructInputSet = tTrue;
+		}
+
+		// set value from sample
+		pCoder->Get(m_szIDVelocityStructInput, (tVoid*)&m_velocityZero);
+		pCoder->Get(m_szIDDistanceStructInput, (tVoid*)&m_distanceZero);
+		pCoder->Get(m_szIDBoolStructInput, (tVoid*)&m_stopActive);
+	}
+
+	if (!m_stopActive) {	// shutdown filter
+		TransmitBoolValue(&m_oTurnRightOutput, tFalse);
+		//TransmitBoolValue(&m_oStopLF, tTrue);
+		TransmitBoolValue(&m_oStopES, tTrue);
+		TransmitBoolValue(&m_oFinishStoppingOutput, tFalse);
+		SetToInitialState();
+		LOG_INFO(cString::Format("SFPP: shutdown stop parking filter"));
+	} else if (!filterActive) { // start filter
+		m_offsetSpot = OFFSET_PARALLEL;
+		spot.push_back(spotStruct(m_distanceZero,1));
+		LOG_INFO(cString::Format("SFPP: start stop parking filter"));
+	}
+
+	RETURN_NOERROR;
+}
+
+tResult cStopFilterParallelParking::ProcessSpotDistance(IMediaSample* pMediaSample){
+
+        tFloat32 fSpotDistance = 0.0;
+	{
+		__adtf_sample_read_lock_mediadescription(m_pDistanceSpotInput,pMediaSample, pCoder);
+
+		if (!m_bIDsDistanceSpotSet) {
+			pCoder->GetID("f32Value", m_szIDDistanceSpotInput);
+			pCoder->GetID("ui32ArduinoTimestamp", m_szIDTimestampDistanceSpotInput);
+			m_bIDsDistanceSpotSet = tTrue;
+		}
+
+		pCoder->Get(m_szIDDistanceSpotInput, (tVoid*)&fSpotDistance);
+	}
+
+	fSpotDistance += m_drivenDistance;
+
+	bool flag = false;
+
+	fstream f2;
+	f2.open("ParkingSpotsParallelLuecken.dat",ios::out|ios::app);
+
+	for( size_t i = 0; i < spot.size(); ++i) {
+		if (fabs(spot[i].distance - fSpotDistance) < SPOT_TOL) {
+			
+				//f2 << "Luecke weiter hinten " << spot[i].distance << " | " << fSpotDistance <<"\n";
+
+				spot[i].distance = (spot[i].distance*spot[i].counter + fSpotDistance)/(spot[i].counter+1);
+				spot[i].counter++;
+			
+			flag = true;
+		}
+	}
+
+	if (!flag) {
+		spot.push_back(spotStruct(fSpotDistance,1));
+	}
+	
+	sort(spot.begin(),spot.end());
+
+	/*if (spot[m_spotCounter-1].distance != m_distanceZero){
+		f2 << "m_distanceZero changed from " << m_distanceZero << " | " << spot[m_spotCounter-1].distance <<"\n";
+		m_distanceZero = spot[m_spotCounter-1].distance;
+		
+	}
+
+
+	f2 << "________________" << "\n";
+	for( size_t i = 0; i < spot.size(); ++i) {
+		f2 << i << " | " << spot[i].distance << "\n";
+	}
+	f2 << "________________" << "\n";
+
+
+	f2.close(); */
+
+	RETURN_NOERROR;
+}
+
+tResult cStopFilterParallelParking::ProcessUltrasonicRightInput(IMediaSample* pMediaSample){
+
+        tFloat32 fUSRight = 0.0;
+	{
+		__adtf_sample_read_lock_mediadescription(m_pUSRightInput,pMediaSample, pCoder);
+
+		if (!m_bIDsUSRightSet) {
+			pCoder->GetID("f32Value", m_szIDUSRightInput);
+			pCoder->GetID("ui32ArduinoTimestamp", m_szIDTimestampUSRightInput);
+			m_bIDsUSRightSet = tTrue;
+		}
+
+		pCoder->Get(m_szIDUSRightInput, (tVoid*)&fUSRight);
+	}
+		fstream f;
+		f.open("sfpp_USRight.dat",ios::out|ios::app);
+		f << fUSRight << " " << _clock->GetStreamTime() << "\n";
+		f.close();
+		
+        if (fUSRight > DIST_TO_CAR) { // no car in spot
+                ++m_goodFrameCount;
+        } else {
+                ++m_badFrameCount;
+        }
+
+	RETURN_NOERROR;
+}
+
+tResult cStopFilterParallelParking::ProcessUltrasonicBackInput(IMediaSample* pMediaSample){
+
+        tFloat32 fUSBack = 0.0;
+	{
+		__adtf_sample_read_lock_mediadescription(m_pUSBackInput,pMediaSample, pCoder);
+
+		if (!m_bIDsUSBackSet) {
+			pCoder->GetID("f32Value", m_szIDUSBackInput);
+			pCoder->GetID("ui32ArduinoTimestamp", m_szIDTimestampUSBackInput);
+			m_bIDsUSBackSet = tTrue;
+		}
+
+		pCoder->Get(m_szIDUSBackInput, (tVoid*)&fUSBack);
+	}
+
+
+        if (fUSBack > 0.35) { // no car behind our car
+                ++m_good_sensor_count;
+        } else {
+                ++m_bad_sensor_count;
+        }
+
+       if (m_bad_sensor_count >= 2) {
+                m_bad_sensor_count = 0;
+                m_good_sensor_count = 0;
+        } else if (m_good_sensor_count >= 4) {
+                m_noTraffic = tTrue;
+        }
+
+		tUInt32 fTime= 0;
+        if (m_startParking){
+                fTime =_clock->GetStreamTime();
+                if (m_i32StartTimeStamp == 0){
+                        m_i32StartTimeStamp = fTime;
+                } else if ((fTime-m_i32StartTimeStamp)/1000000.0 > MAX_WAITING_TIME){
+                        m_noTraffic = tTrue; // erzwinge Einparken
+                }
+        }
+
+        if (m_noTraffic && m_startParking) {
+			startParking();
+        }
+
+
+	RETURN_NOERROR;
+}
+
+
+tResult cStopFilterParallelParking::ProcessSpeed(IMediaSample* pMediaSample){
+	
+    tFloat32 fDistance = 0.0;
+	{
+		__adtf_sample_read_lock_mediadescription(m_pDistanceInput,pMediaSample, pCoder);
+
+		if (!m_bIDsDistanceSet) {
+			pCoder->GetID("f32Value", m_szIDDistanceInput);
+			pCoder->GetID("ui32ArduinoTimestamp", m_szIDTimestampDistanceInput);
+			m_bIDsDistanceSet = tTrue;
+		}
+
+		pCoder->Get(m_szIDDistanceInput, (tVoid*)&fDistance);
+	}
+
+	if (m_distanceOffset == 0.0) {
+		m_distanceOffset = fDistance;
+		//LOG_INFO(cString::Format("%f",m_distanceOffset));
+	}
+	
+	fDistance -= m_distanceOffset;
+        m_drivenDistance = fDistance;
+
+	tFloat32 faux = 1.0 - fDistance / (m_distanceZero + m_offsetSpot);
+
+	if (fDistance<=2 && !m_turnRightON) {
+		m_turnRightON = tTrue;
+		TransmitBoolValue(&m_oTurnRightOutput, true);
+	}
+
+        if (m_driveAround && spot.size() >= m_spotCounter) { //new spot found
+                m_driveAround = tFalse;//stop driving around
+                m_driveAroundOffset = 0.0;
+				m_distanceZero = spot[m_spotCounter].distance; // try next "free" spot
+				++m_spotCounter;
+        }
+
+        if ( m_drivenDistance > (m_distanceZero + (LENGHT_PARALLEL_SPOT / 2) - TEST_AREA + 0.19)){  // car nearly next to middle of free parking spot or has already passed it
+            if ( m_drivenDistance < (m_distanceZero + (LENGHT_PARALLEL_SPOT / 2) + TEST_AREA + 0.19)){ // 0.19 dist cam to sensor side
+				if (m_checkSpot == tFalse) {
+					m_checkSpot = tTrue;
+				}
+            } else if (m_checkSpot){
+                m_checkSpot = tFalse;
+                // decide if spot is really free
+
+                tInt32 counter = m_goodFrameCount + m_badFrameCount;
+LOG_INFO(cString::Format("SFPP: start parking, goodCount %i, badCount %i", m_goodFrameCount, m_badFrameCount));
+				
+
+				if (counter > 0 ){ // else no sensorvalue received => spot is free
+		            if (m_goodFrameCount/(tFloat32)counter < GOOD_COUNT_PERCENTAGE) {   //spot not free
+		                if (spot.size() <= m_spotCounter) {
+		                    m_driveAround = tTrue; //no more spots in list, start to drive around
+		                    m_driveAroundOffset = fDistance;
+							m_spotFree = tFalse;
+		                } else {
+		                    m_distanceZero = spot[m_spotCounter].distance; // try next "free" spot
+LOG_INFO(cString::Format("SFPP: try next spot in %f", m_distanceZero));
+		                    ++m_spotCounter;
+							m_spotFree = tTrue;
+		                }
+		            } 
+
+		            m_goodFrameCount = 0;
+		            m_badFrameCount = 0;
+            	}
+        	}
+		}
+
+	tFloat32 fSpeed = 0.0;
+
+	if (faux < 1e-4 && m_spotFree) {
+		LOG_INFO(cString::Format("SFPP: faux<1e-4"));
+		stopSearchForParkingSpot(tFalse, 0);
+        if (m_noTraffic){
+			startParking();
+        } else {
+			m_startParking = tTrue;
+			fSpeed = 0.0;
+        }
+	} else if ((m_distanceZero + m_offsetSpot - fDistance)<0.45) {
+		fSpeed = MIN_SPEED;
+	} else {
+		fSpeed = sqrt(faux)*m_velocityZero;
+
+		// Don't drive slower than MIN_SPEED
+		if (fSpeed < MIDDLE_SPEED) {
+			fSpeed = MIDDLE_SPEED;
+		}
+	}
+
+        if (m_driveAround){
+                if (DRIVE_AROUND_DISTANCE - (fDistance-m_driveAroundOffset) < 1e-4) {
+                        m_stopActive = tFalse;
+                        m_shutDown = tTrue;
+                        LOG_INFO(cString::Format("SFP: SHUTDOWN"));
+                } else {
+                        fSpeed = DRIVE_AROUND_SPEED;
+                }
+        }
+
+	//LOG_INFO(cString::Format("stop %f",fSpeed));
+
+
+        if (m_stopActive || m_startParking) { //either stopping process or send 0 because of traffic
+                SendVelocity(fSpeed);
+        } else if (m_shutDown){
+                // shut down filter
+                SetToInitialState();
+                TransmitBoolValue(&m_oShutDownOutput, tTrue);
+        }
+
+	RETURN_NOERROR;
+}
+
+tResult cStopFilterParallelParking::startParking(){
+
+	if (spot.size()>=m_spotCounter){
+		if (spot[m_spotCounter].distance-spot[m_spotCounter-1].distance>LENGHT_PARALLEL_SPOT-SPOT_TOL && spot[m_spotCounter].distance-spot[m_spotCounter-1].distance<LENGHT_PARALLEL_SPOT+SPOT_TOL){
+			TransmitBoolValue(&m_oNextSpotFree, tTrue); // transmit that next spot is free too
+		}
+	}
+
+	SetToInitialState();
+	LOG_INFO(cString::Format("SFPP: startParking1"));
+	TransmitBoolValue(&m_oStopLF, tFalse);
+	TransmitBoolValue(&m_oStopES, tFalse);
+	LOG_INFO(cString::Format("SFPP: startParking2"));
+	TransmitBoolValue(&m_oFinishStoppingOutput, tTrue);
+
+	RETURN_NOERROR;
+}
+
+tResult cStopFilterParallelParking::SendVelocity(tFloat32 fSpeed){
+
+	tUInt32 nTimeStamp = 0;
+
+	cObjectPtr<IMediaSample> pNewMediaSample;
+    AllocMediaSample((tVoid**)&pNewMediaSample);
+
+    cObjectPtr<IMediaSerializer> pSerializer;
+    m_pVelocityOutput->GetMediaSampleSerializer(&pSerializer);
+    tInt nSize = pSerializer->GetDeserializedSize();
+    pNewMediaSample->AllocBuffer(nSize);
+
+    //write date to the media sample with the coder of the descriptor
+    {
+        __adtf_sample_write_lock_mediadescription(m_pVelocityOutput, pNewMediaSample, pCoderOutput);
+
+		// set the id if not already done
+        if(!m_bIDsVelocityOutput)
+        {
+            pCoderOutput->GetID("fMinVel", m_szIDMinVelocityOutput);
+                pCoderOutput->GetID("fMaxVel", m_szIDMaxVelocityOutput);
+            pCoderOutput->GetID("ui32ArduinoTimestamp", m_szIDVelocityTimestampOutput);
+            m_bIDsVelocityOutput = tTrue;
+        }
+
+		pCoderOutput->Set(m_szIDMinVelocityOutput, (tVoid*)&(fSpeed));
+		pCoderOutput->Set(m_szIDMaxVelocityOutput, (tVoid*)&(fSpeed));
+		pCoderOutput->Set(m_szIDVelocityTimestampOutput, (tVoid*)&nTimeStamp);
+
+		pNewMediaSample->SetTime(pNewMediaSample->GetTime());
+    }
+
+	m_oVelocity.Transmit(pNewMediaSample);
+
+	//LOG_INFO(cString::Format("SF: Send Velocity %f", fSpeed) );
+	RETURN_NOERROR;
+}
+
+/*
+ * This Method stops the parkingSpot detection filter
+ */
+tResult cStopFilterParallelParking::stopSearchForParkingSpot(tBool status, tInt32 ID) {
+
+		cObjectPtr<IMediaSample> pMediaSample;
+		AllocMediaSample((tVoid**)&pMediaSample);
+
+		//allocate memory with the size given by the descriptor
+		cObjectPtr<IMediaSerializer> pSerializer;
+		m_pStopSearchParkingSpotOutput->GetMediaSampleSerializer(&pSerializer);
+		pMediaSample->AllocBuffer(pSerializer->GetDeserializedSize());
+
+		{
+			__adtf_sample_write_lock_mediadescription(m_pStopSearchParkingSpotOutput, pMediaSample, pCoder);    
+
+			if (!m_bStopSearchParkingSpotOutputSet) {
+				pCoder->GetID("ID", m_szIDStopSearchParkingSpotOutput);
+				pCoder->GetID("bStart", m_szIDBoolValueStopSearchParkingSpotOutput);
+				m_bStopSearchParkingSpotOutputSet = tTrue;
+			}
+
+			// set value from sample
+			pCoder->Set(m_szIDStopSearchParkingSpotOutput, (tVoid*)&ID);
+			pCoder->Set(m_szIDBoolValueStopSearchParkingSpotOutput, (tVoid*)&status);
+		}
+
+		pMediaSample->SetTime(_clock->GetStreamTime());
+
+		m_oStopSearchParkingSpot.Transmit(pMediaSample);
+
+	RETURN_NOERROR; 
+}
+
+
+tResult cStopFilterParallelParking::TransmitBoolValue(cOutputPin* oPin, bool value)
+{
+	//__synchronized_obj(m_oTransmitBoolCritSection);
+	
+    cObjectPtr<IMediaSample> pMediaSample;
+    AllocMediaSample((tVoid**)&pMediaSample);
+
+    //allocate memory with the size given by the descriptor
+    cObjectPtr<IMediaSerializer> pSerializer;
+    m_pDescriptionBool->GetMediaSampleSerializer(&pSerializer);
+    pMediaSample->AllocBuffer(pSerializer->GetDeserializedSize());
+
+    tBool bValue = value;
+    tUInt32 ui32TimeStamp = 0;
+
+    //write date to the media sample with the coder of the descriptor
+    {
+        __adtf_sample_write_lock_mediadescription(m_pDescriptionBool, pMediaSample, pCoderOutput);
+
+        // set the id if not already done
+        if(!m_bIDsBoolValueOutput)
+        {
+            pCoderOutput->GetID("bValue", m_szIDBoolValueOutput);
+            pCoderOutput->GetID("ui32ArduinoTimestamp", m_szIDArduinoTimestampOutput);
+            m_bIDsBoolValueOutput = tTrue;
+        }      
+
+        // set value from sample
+        pCoderOutput->Set(m_szIDBoolValueOutput, (tVoid*)&bValue);     
+        pCoderOutput->Set(m_szIDArduinoTimestampOutput, (tVoid*)&(ui32TimeStamp));     
+    }
+
+    pMediaSample->SetTime(_clock->GetStreamTime());
+
+    //transmit media sample over output pin
+    oPin->Transmit(pMediaSample);
+
+    RETURN_NOERROR;
+}
+
+tResult cStopFilterParallelParking::SetToInitialState() {
+    m_goodFrameCount        = 0;
+    m_badFrameCount         = 0;
+    m_bad_sensor_count      = 0;
+    m_good_sensor_count     = 0;
+    m_noTraffic             = tFalse;
+    m_driveAround           = tFalse;
+    m_turnRightON           = tFalse;
+    m_stopActive            = tFalse;
+    m_checkSpot             = tFalse;
+    m_shutDown              = tFalse;
+    m_startParking          = tFalse;
+	m_spotFree				= tTrue;
+    m_driveAroundOffset     = 0.0;
+    m_offsetSpot            = 0.0;
+    m_drivenDistance        = 0.0;
+    m_velocityZero          = 0.0;
+    m_distanceZero          = 0.0;
+    m_distanceOffset        = 0.0;
+    m_i32StartTimeStamp     = 0;
+    m_waiting_time          = 0.8;
+    m_spotCounter           = 1;
+    spot.clear();
+
+    RETURN_NOERROR;
+}
+

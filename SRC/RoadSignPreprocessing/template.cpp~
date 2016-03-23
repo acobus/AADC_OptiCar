@@ -1,0 +1,118 @@
+/**
+ *
+ * ADTF Template Project
+ *
+ * @file
+ * Copyright &copy; Audi Electronics Venture GmbH. All rights reserved
+ *
+ * $Author: belkera $
+ * $Date: 2011-06-30 16:51:21 +0200 (Do, 30 Jun 2011) $
+ * $Revision: 26514 $
+ *
+ * @remarks
+ *
+ */
+#include "stdafx.h"
+#include "RoadSignPreprocessing.h"
+
+/// Create filter shell
+ADTF_FILTER_PLUGIN("Roadsign Preprocessing Filter", OID_ADTF_ROAD_SIGN_PREPROCESSING_FILTER, cRoadSignPreprocessing);
+
+
+cRoadSignPreprocessing::cRoadSignPreprocessing(const tChar* __info):cFilter(__info)
+{
+
+}
+
+cRoadSignPreprocessing::~cRoadSignPreprocessing()
+{
+
+}
+
+tResult cRoadSignPreprocessing::Init(tInitStage eStage, __exception)
+{
+    // never miss calling the parent implementation!!
+    RETURN_IF_FAILED(cFilter::Init(eStage, __exception_ptr))
+    
+    // in StageFirst you can create and register your static pins.
+    if (eStage == StageFirst)
+    {
+
+    }
+    else if (eStage == StageNormal)
+    {
+
+    }
+    else if (eStage == StageGraphReady)
+    {
+
+    }
+
+    RETURN_NOERROR;
+}
+
+tResult cRoadSignPreprocessing::Shutdown(tInitStage eStage, __exception)
+{
+    
+    if (eStage == StageGraphReady)
+    {
+    }
+    else if (eStage == StageNormal)
+    {
+    }
+    else if (eStage == StageFirst)
+    {
+    }
+
+    // call the base class implementation
+    return cFilter::Shutdown(eStage, __exception_ptr);
+}
+
+tResult cRoadSignPreprocessing::OnPinEvent(IPin* pSource,
+                                           tInt nEventCode,
+                                           tInt nParam1,
+                                           tInt nParam2,
+                                           IMediaSample* pMediaSample)
+{
+    // first check what kind of event it is
+    if (nEventCode == IPinEventSink::PE_MediaSampleReceived)
+    {
+        // so we received a media sample, so this pointer better be valid.
+        RETURN_IF_POINTER_NULL(pMediaSample);
+
+        // by comparing it to our member pin variable we can find out which pin received
+        // the sample
+        if (pSource == &m_oTemplateInput)
+        {
+            // this will store the value for our new sample
+            tTemplateData fNewValue;
+            
+            // now lets access the data in the sample,
+            // the Lock method gives you access to the buffer of the sample.
+            // we use a scoped sample lock to ensure that the lock is released in all circumstances.
+
+            {
+                // this will aquire the read lock on the sample and declare and initialize a pointer to the data
+                __sample_read_lock(pMediaSample, tTemplateData, pData);
+                // now we can access the sample data through the pointer
+                fNewValue = *pData + 1.0;
+                // the read lock on the sample will be released when leaving this scope
+            }
+
+            // now we need a new media sample to forward the data.
+            cObjectPtr<IMediaSample> pNewSample;
+            if (IS_OK(AllocMediaSample(&pNewSample)))
+            {
+                // now set its data
+                // we reuse the timestamp from the incoming media sample. Please see the api documentation
+                // (ADTF Extreme Programmers -> The ADTF Streamtime) for further reference on how sample times are handled in ADTF
+                pNewSample->Update(pMediaSample->GetTime(), &fNewValue, sizeof(tTemplateData), 0);
+
+                // and now we can transmit it
+                m_oTemplateOutput.Transmit(pNewSample);
+            }
+        }
+    }
+
+    RETURN_NOERROR;
+}

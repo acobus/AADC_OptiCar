@@ -1,0 +1,60 @@
+#ifndef _STOP_FILTER_H_
+#define _STOP_FILTER_H_
+
+#define OID_STOP_FILTER "adtf.stop_filter"
+
+
+//*************************************************************************************************
+class cStopFilter : public adtf::cFilter
+{
+    ADTF_FILTER(OID_STOP_FILTER, "Stop Filter", adtf::OBJCAT_DataFilter);
+
+protected:
+	cInputPin		m_iDistance;
+	cInputPin 		m_iStopStruct;
+    cOutputPin    	m_oVelocity;
+
+public:
+    cStopFilter(const tChar* __info);
+    virtual ~cStopFilter();
+
+private:
+
+	// DistanceInput
+	cObjectPtr<IMediaTypeDescription> m_pDistanceInput;
+	tBufferID m_szIDDistanceInput; 
+	tBufferID m_szIDTimestampDistanceInput; 
+	
+	// VelocityOutput
+	cObjectPtr<IMediaTypeDescription> m_pVelocityOutput;
+	tBufferID m_szIDVelocityOutput; 
+	tBufferID m_szIDTimestampVelocityOutput; 
+
+	// StopStruct (Input)
+	cObjectPtr<IMediaTypeDescription> m_pStopStructInput;
+	tBufferID m_szIDVelocityStructInput; 
+	tBufferID m_szIDDistanceStructInput; 
+	tBufferID m_szIDBoolStructInput;
+	tBool m_pStopStructInputSet;
+
+	tBool m_stopActive;
+	tFloat32 m_velocityZero;
+	tFloat32 m_distanceZero;
+
+protected:
+    tResult Init(tInitStage eStage, __exception);
+    tResult Shutdown(tInitStage eStage, __exception);
+
+	tResult ProcessSpeed(IMediaSample* pMediaSample);
+	tResult ProcessStopStruct(IMediaSample* pMediaSample);
+
+    // implements IPinEventSink
+    tResult OnPinEvent(IPin* pSource,
+                       tInt nEventCode,
+                       tInt nParam1,
+                       tInt nParam2,
+                       IMediaSample* pMediaSample);
+};
+
+//*************************************************************************************************
+#endif 

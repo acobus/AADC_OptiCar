@@ -1,0 +1,92 @@
+#ifndef _TicTacTactic_FILTER_HEADER_
+#define _TicTacTactic_FILTER_HEADER_
+
+#define OID_ADTF_TicTacTactic  "adtf.aadc.TicTacTactic"
+#define LT_POINTS_ARRAY_SIZE 640
+
+class cTicTacTactic : public adtf::cFilter,
+                      public adtf::ISignalProvider
+{
+    
+    ADTF_DECLARE_FILTER_VERSION(OID_ADTF_TicTacTactic, "TicTacTactic", OBJCAT_Tool, "TicTacTactic", 1, 0, 0, "BFFT GmbH");    
+    
+protected:
+    //Eingang für RGB Bild
+
+    cInputPin           m_i1; 
+    cInputPin           m_i2; 
+    cInputPin           m_i3; 
+    cInputPin           m_i4; 
+
+public:
+
+
+                
+    cTicTacTactic(const tChar*);
+    virtual ~cTicTacTactic();
+
+    // implements cFilter
+    tResult Init(tInitStage eStage, __exception=NULL);
+    tResult Shutdown(tInitStage eStage, ucom::IException** __exception_ptr=NULL);
+    tResult OnPinEvent(IPin* pSource, tInt nEventCode, tInt nParam1, tInt nParam2, IMediaSample* pMediaSample);
+    tResult Start(__exception = NULL);
+    tResult Stop(__exception = NULL);
+    tResult PropertyChanged(const char* strProperty);
+
+public: // implements ISignalProvider
+    virtual tResult GetSignalValue(tSignalID nSignalID, tSignalValue* pValue);
+    virtual tResult ActivateSignalEvents(tSignalID nSignalID, tTimeStamp nUpdateRate = 0);
+    virtual tResult DeactivateSignalEvents(tSignalID nSignalID);
+
+public: // implements IObject
+    tResult GetInterface(const tChar* idInterface, tVoid** ppvObject);
+    tUInt Ref();
+    tUInt Unref();
+    tVoid Destroy();
+
+private: // private methods
+    tResult ProcessFound();
+    tResult ProcessOutput();
+    tResult ReadProperties(const tChar* strPropertyName = NULL);
+
+
+protected:
+    tResult Run(tInt nActivationCode, const tVoid* pvUserData, tInt szUserDataSize, ucom::IException** __exception_ptr = NULL);
+public:
+	Pointf m_1;
+	Pointf m_2;
+	Pointf m_3;
+	Pointf m_4;
+
+
+private:
+
+	cObjectPtr<IMediaTypeDescription> m_p1Input;
+	cObjectPtr<IMediaTypeDescription> m_p2Input;
+	cObjectPtr<IMediaTypeDescription> m_p3Input;
+	cObjectPtr<IMediaTypeDescription> m_p4Input;
+	tBufferID m_sz1; 
+	tBufferID m_sz2; 
+	tBufferID m_sz3; 
+	tBufferID m_sz4; 
+	tBool m_b1set;
+	tBool m_b2set;
+	tBool m_b3set;
+	tBool m_b4set;
+ 	
+
+
+    // members for signal registry
+    typedef std::set<tSignalID> tActiveSignals;
+
+    ucom::cObjectPtr<ISignalRegistryExtended> m_pISignalRegistry;
+    cKernelMutex                              m_oLock;
+    tActiveSignals                            m_oActive;
+
+    // caching the error values for signal registry
+    tFloat64            m_f64PT1ScaledError;
+    tInt16              m_i16Error;
+        
+};
+
+#endif 

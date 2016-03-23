@@ -1,0 +1,15 @@
+#ifndef _UTIL_
+#define _UTIL_
+
+#include "stdafx.h"
+#include "../../include/camera_angle.h"
+
+namespace Util
+
+	Point3f ComputeWorldCoordinate(float point_x, float point_y, float depth_value); 
+
+	float camera_angle_rad 	= camera_angle / 360 * 2 * pi;
+
+};
+
+#endif //Util	

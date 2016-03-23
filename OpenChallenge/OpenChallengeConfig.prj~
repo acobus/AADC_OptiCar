@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="iso-8859-1" standalone="no"?>
+<project name="LiveVisualizationConfig" version="2.0">
+ <folder desc="Configuration Files" expand="" name="Configuration" path="config" type="config">
+  <file name="System Configuration" path=".\config\system.xml" type="config/sys" />
+ </folder>
+ <folder active="true" desc="Tasks" expand="*.dat" name="Captured Files" path="files" type="capture" />
+ <file name="Test_007.dat" path="./config/Test_007.dat" type="capture/datfile" />
+ <file name="Test_021.dat" path="./config/Test_021.dat" type="capture/datfile" />
+ <file name="Test_052.dat" path="./config/Test_052.dat" type="capture/datfile" />
+ <file name="Test_059.dat" path="./config/Test_059.dat" type="capture/datfile" />
+ <file name="Test_011.dat" path="./config/Test_011.dat" type="capture/datfile" />
+ <file name="Test_019.dat" path="./config/Test_019.dat" type="capture/datfile" />
+ <file name="Test_019.dat" path="./config/Test_019.dat" type="capture/datfile" />
+ <file name="Test_019.dat" path="./config/Test_019.dat" type="capture/datfile" />
+ <file name="Test_021.dat" path="./config/Test_021.dat" type="capture/datfile" />
+ <file name="Test_021.dat" path="./config/Test_021.dat" type="capture/datfile" />
+ <file name="Test_037.dat" path="./config/Test_037.dat" type="capture/datfile" />
+ <file name="Test_040.dat" path="./config/Test_040.dat" type="capture/datfile" />
+ <file name="Test_001.dat" path="./config/Test_001.dat" type="capture/datfile" />
+ <file name="Test_021.dat" path="./config/Test_021.dat" type="capture/datfile" />
+ <file name="Test_040.dat" path="./config/Test_040.dat" type="capture/datfile" />
+ <file name="Test_052.dat" path="./config/Test_052.dat" type="capture/datfile" />
+ <file name="Test_007.dat" path="./config/Test_007.dat" type="capture/datfile" />
+ <file name="Test_007.dat" path="./config/Test_007.dat" type="capture/datfile" />
+ <file name="Test_001.dat" path="./config/Test_001.dat" type="capture/datfile" />
+ <file name="Test.dat" path="./config/Test.dat" type="capture/datfile" />
+ <file name="Test_001.dat" path="./config/Test_001.dat" type="capture/datfile" />
+ <file name="Test_001.dat" path="./config/Test_001.dat" type="capture/datfile" />
+ <file name="Test.dat" path="./config/Test.dat" type="capture/datfile" />
+ <file name="Test.dat" path="./config/Test.dat" type="capture/datfile" />
+ <file name="Test.dat" path="./config/Test.dat" type="capture/datfile" />
+ <file name="Test.dat" path="./config/Test.dat" type="capture/datfile" />
+ <file name="Test_002.dat" path="./config/Test_002.dat" type="capture/datfile" />
+ <file name="Test_004.dat" path="./config/Test_004.dat" type="capture/datfile" />
+ <file name="Test.dat" path="./config/Test.dat" type="capture/datfile" />
+ <file name="Test_001.dat" path="./config/Test_001.dat" type="capture/datfile" />
+ <file name="Test_007.dat" path="./config/Test_007.dat" type="capture/datfile" />
+ <file name="Test_010.dat" path="./config/Test_010.dat" type="capture/datfile" />
+ <file name="Test_001.dat" path="./config/Test_001.dat" type="capture/datfile" />
+ <file name="Test_006.dat" path="./config/Test_006.dat" type="capture/datfile" />
+ <file name="Test_007.dat" path="./config/Test_007.dat" type="capture/datfile" />
+ <file name="Test_008.dat" path="./config/Test_008.dat" type="capture/datfile" />
+ <file name="Test_009.dat" path="./config/Test_009.dat" type="capture/datfile" />
+ <file name="Test_005.dat" path="./config/Test_005.dat" type="capture/datfile" />
+ <file name="Test_002.dat" path="./config/Test_002.dat" type="capture/datfile" />
+ <file name="Test_005.dat" path="./config/Test_005.dat" type="capture/datfile" />
+ <file name="Test_007.dat" path="./config/Test_007.dat" type="capture/datfile" />
+ <file name="Test_011.dat" path="./config/Test_011.dat" type="capture/datfile" />
+ <file name="Test_020.dat" path="./config/Test_020.dat" type="capture/datfile" />
+ <file name="Test_021.dat" path="./config/Test_021.dat" type="capture/datfile" />
+ <file name="Test_042.dat" path="./config/Test_042.dat" type="capture/datfile" />
+ <file name="Test_043.dat" path="./config/Test_043.dat" type="capture/datfile" />
+ <file name="Test_057.dat" path="./config/Test_057.dat" type="capture/datfile" />
+ <file name="Test_058.dat" path="./config/Test_058.dat" type="capture/datfile" />
+ <file name="Test_060.dat" path="./config/Test_060.dat" type="capture/datfile" />
+ <file name="Test_061.dat" path="./config/Test_061.dat" type="capture/datfile" />
+ <file name="Test_063.dat" path="./config/Test_063.dat" type="capture/datfile" />
+ <file name="Test_066.dat" path="./config/Test_066.dat" type="capture/datfile" />
+ <file name="Test_067.dat" path="./config/Test_067.dat" type="capture/datfile" />
+ <file name="Test_068.dat" path="./config/Test_068.dat" type="capture/datfile" />
+ <file name="Test_069.dat" path="./config/Test_069.dat" type="capture/datfile" />
+ <file name="Test_070.dat" path="./config/Test_070.dat" type="capture/datfile" />
+ <file name="Test_076.dat" path="./config/Test_076.dat" type="capture/datfile" />
+ <file name="Test_002.dat" path="./config/Test_002.dat" type="capture/datfile" />
+ <file name="Test_005.dat" path="./config/Test_005.dat" type="capture/datfile" />
+ <file name="Test_008.dat" path="./config/Test_008.dat" type="capture/datfile" />
+ <file name="Test_009.dat" path="./config/Test_009.dat" type="capture/datfile" />
+ <file name="Test.dat" path="./config/Test.dat" type="capture/datfile" />
+ <file name="Test.dat" path="./config/Test.dat" type="capture/datfile" />
+ <file name="Test_001.dat" path="./config/Test_001.dat" type="capture/datfile" />
+ <file name="Test_005.dat" path="./config/Test_005.dat" type="capture/datfile" />
+ <file name="Test_012.dat" path="./config/Test_012.dat" type="capture/datfile" />
+ <file name="Test_002.dat" path="./config/Test_002.dat" type="capture/datfile" />
+ <file name="Test_003.dat" path="./config/Test_003.dat" type="capture/datfile" />
+ <file name="Test_003.dat" path="./config/Test_003.dat" type="capture/datfile" />
+ <file name="Test_004.dat" path="./config/Test_004.dat" type="capture/datfile" />
+ <file name="Test_004.dat" path="./config/Test_004.dat" type="capture/datfile" />
+ <file name="Test_005.dat" path="./config/Test_005.dat" type="capture/datfile" />
+ <file name="Test_006.dat" path="./config/Test_006.dat" type="capture/datfile" />
+ <file name="Test_019.dat" path="./config/Test_019.dat" type="capture/datfile" />
+ <file name="Jury_Data_001.dat" path="./config/Jury_Data_001.dat" type="capture/datfile" />
+ <file name="OCDriving_009.dat" path="./config/OCDriving_009.dat" type="capture/datfile" />
+ <file name="OCDriving_011.dat" path="./config/OCDriving_011.dat" type="capture/datfile" />
+</project>

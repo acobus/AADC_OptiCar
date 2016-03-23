@@ -1,0 +1,858 @@
+/*
+ * Date 17.03.2016
+ */ 
+
+#include <math.h>
+#include "stdafx.h"
+#include "StopZebraStripesFilter.h"
+#include "/home/aadc/Desktop/AADC Source/src/aadcUser/src/Util/Util.h"
+#include <fstream>
+
+#include "../../include/action_enum.h"
+#include "../../include/cross_type.h"
+#include "../../include/cross_sign_type.h"
+
+#define OFFSET_CAMERA 0.21
+#define MIN_SPEED 0.4
+#define MIDDLE_SPEED 0.9
+#define DELAY_SPEED 0.6
+#define OBJECT_HEIGHT 0.05
+#define OFFSET_X 0.00
+#define MAX_WAITING_TIME 10.0
+#define NEXT_TO_LANE_X 0.2
+#define OFFSET_HOLD_LINE 0.40
+//#define LENGHT_STRIPES 0.3 // now a member
+
+#define SZSF_PROP_SHOW_GCL "Common::Show GCL Output"
+
+
+using namespace cv;
+
+ADTF_FILTER_PLUGIN("StopZebraStripesFilter", __guid, StopZebraStripesFilter);
+
+
+StopZebraStripesFilter::StopZebraStripesFilter(const tChar* __info)
+{
+
+	SetPropertyInt("Actuator Update Rate [Hz]",30);
+	SetPropertyStr("Actuator Update Rate [Hz]" NSSUBPROP_DESCRIPTION, "Defines how much updates for steering and speed controller are sent in one second (Range: 0 to 100 Hz)"); 
+	SetPropertyInt("Actuator Update Rate [Hz]" NSSUBPROP_MIN, 0); 
+	SetPropertyInt("Actuator Update Rate [Hz]" NSSUBPROP_MAX, 100);
+
+	SetPropertyBool(SZSF_PROP_SHOW_GCL, tFalse);
+    SetPropertyStr(SZSF_PROP_SHOW_GCL NSSUBPROP_DESCRIPTION, "If true, the opencv windows will be shown and the gcl output is enabled.");
+}
+
+StopZebraStripesFilter::~StopZebraStripesFilter()
+{
+
+}
+
+tResult StopZebraStripesFilter::Init(tInitStage eStage, __exception)
+{
+    RETURN_IF_FAILED(cFilter::Init(eStage, __exception_ptr));
+
+    // pins need to be created at StageFirst
+    if (eStage == StageFirst)    {
+
+        //get the description manager for this filter
+        cObjectPtr<IMediaDescriptionManager> pDescManager;
+        RETURN_IF_FAILED(_runtime->GetObject(OID_ADTF_MEDIA_DESCRIPTION_MANAGER,IID_ADTF_MEDIA_DESCRIPTION_MANAGER,(tVoid**)&pDescManager,__exception_ptr));
+
+        //get description for sensor data pins
+        tChar const * strDescSignalValue = pDescManager->GetMediaDescription("tSignalValue");	
+        RETURN_IF_POINTER_NULL(strDescSignalValue);	
+        //get mediatype for ultrasonic sensor data pins
+        cObjectPtr<IMediaType> pTypeSignalValue = new cMediaType(0, 0, 0, "tSignalValue", strDescSignalValue, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+
+        // MediaDescription of StopFilter-Struct
+        tChar const* strDescStopStruct = pDescManager->GetMediaDescription("tStopZebraStripesStruct");
+        RETURN_IF_POINTER_NULL(strDescStopStruct);
+        cObjectPtr<IMediaType> pTypeStopStruct = new cMediaType(0, 0, 0, "tStopZebraStripesStruct", strDescStopStruct, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+
+ 		// Get description for bool values
+		tChar const * strDescBoolSignalValue = pDescManager->GetMediaDescription("tBoolSignalValue");	
+		RETURN_IF_POINTER_NULL(strDescBoolSignalValue);	
+		cObjectPtr<IMediaType> pTypeBoolSignalValue = new cMediaType(0, 0, 0, "tBoolSignalValue", strDescBoolSignalValue, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+
+		// Media Description Sensors
+		tChar const * UltraSonicDesc = pDescManager->GetMediaDescription("tUltrasonicStruct");
+		RETURN_IF_POINTER_NULL(UltraSonicDesc);
+		cObjectPtr<IMediaType> pTypeUltraSonicDesc = new cMediaType(0, 0, 0, "tUltrasonicStruct", UltraSonicDesc, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+
+        // Media Description LaneTracking Velocity
+        tChar const * LTVelocityDescValue = pDescManager->GetMediaDescription("tLTVelocityValue");
+        RETURN_IF_POINTER_NULL(LTVelocityDescValue);
+        cObjectPtr<IMediaType> pTypeLTVelocityValue = new cMediaType(0, 0, 0, "tLTVelocityValue", LTVelocityDescValue, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+		
+
+		RETURN_IF_FAILED(pTypeBoolSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pDescriptionBool));
+		RETURN_IF_FAILED(pTypeUltraSonicDesc->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pUltraSonicInput)); 
+		RETURN_IF_FAILED(pTypeSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pDistanceInput));
+        RETURN_IF_FAILED(pTypeStopStruct->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pStopStructInput));
+        RETURN_IF_FAILED(pTypeLTVelocityValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pVelocityOutput));
+
+
+		//create input pin for US
+    	RETURN_IF_FAILED(m_iUltraSonic.Create("us_struct", pTypeUltraSonicDesc, static_cast<IPinEventSink*> (this)));
+    	RETURN_IF_FAILED(RegisterPin(&m_iUltraSonic));
+
+		// StopFilter Structure
+		RETURN_IF_FAILED(m_iStopStruct.Create("StopStruct", pTypeStopStruct, static_cast <IPinEventSink*> (this)));
+		RETURN_IF_FAILED(RegisterPin(&m_iStopStruct));
+
+		// Depthimage Input
+        RETURN_IF_FAILED(m_iDepthimagePin.Create("Depthimage_Input", IPin::PD_Input, static_cast<IPinEventSink*>(this)));
+        RETURN_IF_FAILED(RegisterPin(&m_iDepthimagePin));
+
+		// DistanceInput
+		RETURN_IF_FAILED(m_iDistance.Create("Distance_overall", pTypeSignalValue, static_cast<IPinEventSink*> (this)));
+        RETURN_IF_FAILED(RegisterPin(&m_iDistance));
+
+		// VelocityOutput
+		RETURN_IF_FAILED(m_oVelocity.Create("VelocityLT", pTypeLTVelocityValue, static_cast<IPinEventSink*> (this)));	
+        RETURN_IF_FAILED(RegisterPin(&m_oVelocity));
+		RETURN_IF_FAILED(pTypeLTVelocityValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pVelocityOutput));
+
+        //create output pin for finish output data
+        RETURN_IF_FAILED(m_oFinishFilter.Create("finish_zebraStripes", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));
+        RETURN_IF_FAILED(RegisterPin(&m_oFinishFilter));
+
+
+		//GLC Output
+        cObjectPtr<IMediaType> pCmdType = NULL;
+        RETURN_IF_FAILED(AllocMediaType(&pCmdType, MEDIA_TYPE_COMMAND, MEDIA_SUBTYPE_COMMAND_GCL, __exception_ptr));
+        RETURN_IF_FAILED(m_oGCLOutput.Create("GLC_Output",pCmdType, static_cast<IPinEventSink*> (this)));
+        RETURN_IF_FAILED(RegisterPin(&m_oGCLOutput));
+
+    	
+        RETURN_NOERROR;
+    }
+    else if(eStage == StageNormal)
+    {
+    }
+    else if(eStage == StageGraphReady)
+    {
+        // no ids were set so far
+		m_bFirstFrameDepthimage			= tTrue;
+		m_pStopStructInputSet			= tFalse;
+		m_bIDsUltraSonicSet				= tFalse;
+		m_bIDsDistanceSet				= tFalse;
+		m_bIDsVelocityOutput			= tFalse;
+		m_bIDsBoolValueOutput			= tFalse;
+
+		InitialState();
+    }
+
+    RETURN_NOERROR;
+}
+
+
+tResult StopZebraStripesFilter::Start(__exception)
+{
+    RETURN_IF_FAILED(cFilter::Start(__exception_ptr));
+
+    //create the timer for the transmitting actuator values
+    tTimeStamp tmPeriod = tTimeStamp(1/float(GetPropertyInt("Actuator Update Rate [Hz]"))*1000000);
+    m_hTimerOutput = _kernel->TimerCreate(tmPeriod, GetPropertyInt("Actuator Startup Time Delay [sec]")*1000000, static_cast<IRunnable*>(this),
+        NULL, &m_hTimerOutput, 0, 0, adtf_util::cString::Format("%s.timer", OIGetInstanceName()));
+
+    RETURN_NOERROR;
+}
+
+
+tResult StopZebraStripesFilter::Run(tInt nActivationCode, const tVoid* pvUserData, tInt szUserDataSize, ucom::IException** __exception_ptr/* =NULL */)
+{
+    return cFilter::Run(nActivationCode, pvUserData, szUserDataSize, __exception_ptr);
+}
+
+
+tResult StopZebraStripesFilter::Stop(__exception)
+{       
+    if (m_hTimerOutput) 
+    {
+        _kernel->TimerDestroy(m_hTimerOutput);
+        m_hTimerOutput = NULL;
+    }
+
+    RETURN_IF_FAILED(cFilter::Stop(__exception_ptr));
+
+    RETURN_NOERROR;
+}
+
+tResult StopZebraStripesFilter::Shutdown(tInitStage eStage, __exception)
+{ 
+    return cFilter::Shutdown(eStage, __exception_ptr);
+}
+
+
+tResult StopZebraStripesFilter::PropertyChanged(const char* strProperty)
+{
+
+	if (NULL == strProperty || cString::IsEqual(strProperty, SZSF_PROP_SHOW_GCL)) {
+		m_showGCL = GetPropertyBool(SZSF_PROP_SHOW_GCL);
+	}
+
+	RETURN_NOERROR;
+}
+
+tResult StopZebraStripesFilter::OnPinEvent(IPin* pSource,
+                                           tInt nEventCode,
+                                           tInt nParam1,
+                                           tInt nParam2,
+                                           IMediaSample* pMediaSample)
+{
+    // first check what kind of event it is
+	if (nEventCode == IPinEventSink::PE_MediaSampleReceived) {
+		// so we received a media sample, so this pointer better be valid.
+    	RETURN_IF_POINTER_NULL(pMediaSample);
+
+		if (&m_iStopStruct == pSource) {
+			ProcessZebraStripeStruct(pMediaSample);
+		} else if (pSource == &m_iDistance && m_stoppingProcessActive){
+			ProcessStoppingSpeed(pMediaSample); 
+		} else if (pSource == &m_iDepthimagePin && m_filterActive) {
+			
+	        //Videoformat
+	        if (m_bFirstFrameDepthimage)
+	        {        
+	            cObjectPtr<IMediaType> pType;
+	            RETURN_IF_FAILED(m_iDepthimagePin.GetMediaType(&pType));
+	            cObjectPtr<IMediaTypeVideo> pTypeVideo;
+	            RETURN_IF_FAILED(pType->GetInterface(IID_ADTF_MEDIA_TYPE_VIDEO, (tVoid**)&pTypeVideo));
+	            const tBitmapFormat* pFormat = pTypeVideo->GetFormat();                                
+	            if (pFormat == NULL)
+	            {
+	                //LOG_ERROR("No Bitmap information found on pin \"input\"");
+	                RETURN_ERROR(ERR_NOT_SUPPORTED);
+	            }
+	            m_sInputFormatDepthimage.nPixelFormat = pFormat->nPixelFormat;
+	            m_sInputFormatDepthimage.nWidth = pFormat->nWidth;
+	            m_sInputFormatDepthimage.nHeight =  pFormat->nHeight;
+	            m_sInputFormatDepthimage.nBitsPerPixel = pFormat->nBitsPerPixel;
+	            m_sInputFormatDepthimage.nBytesPerLine = pFormat->nBytesPerLine;
+	            m_sInputFormatDepthimage.nSize = pFormat->nSize;
+	            m_sInputFormatDepthimage.nPaletteSize = pFormat->nPaletteSize;
+        	    m_bFirstFrameDepthimage = false;
+
+				m_i32StartTimeStamp = 0;
+        	}		
+			
+			if (m_dist2crossing < 1.0) {
+				if (m_i32StartTimeStamp==0){
+					m_i32StartTimeStamp = _clock->GetStreamTime();
+				} 
+				tUInt32 fTime = _clock->GetStreamTime();
+
+				if ((fTime-m_i32StartTimeStamp)/1000000.0 > m_waiting_time){
+					ProcessInputDepth(pMediaSample);
+					m_i32StartTimeStamp = fTime;
+				}
+			} 
+
+        } else if (&m_iUltraSonic == pSource && m_dist2crossing < 0.10 && m_filterActive) {
+			ProcessUltraSonic(pMediaSample);
+		}
+	}
+    RETURN_NOERROR;
+}
+
+tResult StopZebraStripesFilter::ProcessUltraSonic(IMediaSample* pMediaSample){
+
+	tSignalValue frontLeft, frontCenterLeft, frontCenter, frontCenterRight;//, frontRight;
+
+	{
+		__adtf_sample_read_lock_mediadescription(m_pUltraSonicInput, pMediaSample, pCoder);    
+		
+		if (!m_bIDsUltraSonicSet) {						  
+			pCoder->GetID("tFrontLeft", m_szIDFrontLeftUltraSonicInput);
+			pCoder->GetID("tFrontCenterLeft", m_szIDFrontCenterLeftUltraSonicInput);
+			pCoder->GetID("tFrontCenter", m_szIDFrontCenterUltraSonicInput);
+			pCoder->GetID("tFrontCenterRight", m_szIDFrontCenterRightUltraSonicInput);
+			//pCoder->GetID("tFrontRight", m_szIDFrontRightUltraSonicInput);
+			m_bIDsUltraSonicSet=tTrue;
+		}
+
+		pCoder->Get(m_szIDFrontLeftUltraSonicInput, (tVoid*)&frontLeft); 
+		pCoder->Get(m_szIDFrontCenterLeftUltraSonicInput, (tVoid*)&frontCenterLeft);   
+		pCoder->Get(m_szIDFrontCenterUltraSonicInput, (tVoid*)&frontCenter);   
+		pCoder->Get(m_szIDFrontCenterRightUltraSonicInput, (tVoid*)&frontCenterRight);   
+		//pCoder->Get(m_szIDFrontRightUltraSonicInput, (tVoid*)&frontRight);    
+	}
+
+	if (m_showGCL) {
+		m_US_FL = frontLeft.f32Value;
+		m_US_FCL = frontCenterLeft.f32Value;
+		m_US_FC = frontCenter.f32Value;
+		m_US_FCR = frontCenterRight.f32Value;
+	}
+
+	tBool goodStruct = tFalse;
+
+	/*fstream f2;
+	f2.open("StopZebra_US.dat",ios::out|ios::app);
+	f2 << frontLeft.f32Value << "\t" << frontCenterLeft.f32Value << "\t" << frontCenter.f32Value << "\t" << frontCenterRight.f32Value;// << "\t" << frontRight.f32Value;*/
+	
+
+	if (frontLeft.f32Value > 0.90 + m_dist2crossing && frontCenterLeft.f32Value > 0.70 + OFFSET_HOLD_LINE + m_dist2crossing && frontCenter.f32Value> m_zebraLength + 0.05 + OFFSET_HOLD_LINE + m_dist2crossing && frontCenterRight.f32Value > 0.35 + OFFSET_HOLD_LINE + m_dist2crossing){ 
+		goodStruct = tTrue;
+		//f2 << "\t\tgood\n";
+	
+	} else {
+		//f2 << "\t\tbad\n";
+	}
+	//f2.close();
+
+
+	if (goodStruct) {
+		++m_good_us_count;
+	} else {
+		++m_bad_us_count;
+		if (m_bad_us_count >=2) {
+			m_good_us_count = 0;
+			m_bad_us_count = 0;
+		}
+	}
+
+	if (m_good_us_count >= 4) {
+		m_noTrafficSensor = tTrue;
+	} else {
+		m_noTrafficSensor = tFalse;
+	}
+
+	if (!m_stoppingProcessActive){
+		tFloat32 fWaitingTime =( _clock->GetStreamTime() - m_i32TimeStampZebraStripe) /1000000.0;
+		if (fWaitingTime >= MAX_WAITING_TIME || (m_noTrafficSensor && m_noTrafficCamera)){
+			stopFilter();
+		}// else { //ueberfluessig?? /TODO
+			//tFloat32 fSpeed = 0.0;
+			//SendVelocityLT(fSpeed);					
+		//}
+	}
+
+	/*tFloat32 fWaitingTime =( _clock->GetStreamTime() - m_i32TimeStampZebraStripe) /1000000.0;
+	fstream f;
+	f.open("StopZebra.dat",ios::out|ios::app);
+	f << "m_dist2crossing " << m_dist2crossing << " , " << "m_noTrafficSensor " << m_noTrafficSensor << " , " << "m_stoppingProcessActive " << m_stoppingProcessActive << " , " << "fWaitingTime " << fWaitingTime <<"\n";
+	f.close();*/
+
+	RETURN_NOERROR;
+
+}
+
+tResult StopZebraStripesFilter::ProcessZebraStripeStruct(IMediaSample* pMediaSample) {
+
+	tBool filterActive = m_filterActive;
+	//SendVelocityLT(0.0);
+	tFloat32 fardist 	= 0.0;
+	
+
+	{
+		__adtf_sample_read_lock_mediadescription(m_pStopStructInput, pMediaSample, pCoder);
+
+		if (!m_pStopStructInputSet){
+			pCoder->GetID("fVelocity", m_szIDVelocityStructInput);
+			pCoder->GetID("neardist", m_szIDDistanceStructInput);
+			pCoder->GetID("fardist", m_szIDFarDistStructInput);
+			pCoder->GetID("start", m_szIDBoolStructInput);
+			m_pStopStructInputSet = tTrue;
+		}
+
+		// set value from sample
+		pCoder->Get(m_szIDVelocityStructInput, (tVoid*)&m_velocityZero);
+		pCoder->Get(m_szIDDistanceStructInput, (tVoid*)&m_distanceZero);
+		pCoder->Get(m_szIDFarDistStructInput, (tVoid*)&fardist);
+		pCoder->Get(m_szIDBoolStructInput, (tVoid*)&m_filterActive);
+	}
+
+	if (!m_filterActive){ // shutdown filter
+		LOG_INFO(cString::Format("SZSF: shutdown zebra stop"));
+		InitialState();
+		RETURN_NOERROR;
+	} else if(filterActive){ // filter is active, don't start again
+		RETURN_NOERROR;
+	}
+
+	LOG_INFO(cString::Format("SZSF: start zebra stop!"));
+	LOG_INFO(cString::Format("SZSF: stop: m_velocityZero=%f, m_distanceZero=%f, fardist=%f, m_filterActive=%i", m_velocityZero, m_distanceZero, fardist, m_filterActive));
+
+
+	if (fardist > 0.0){
+		m_zebraLength 	= fardist-m_distanceZero;
+	}else{
+		LOG_WARNING(cString::Format("SZSF: Invalid StopStruct-Data!"));
+	}	
+
+	if (m_distanceZero - (OFFSET_CAMERA + OFFSET_HOLD_LINE) > 0) {
+		m_distanceZero -= OFFSET_CAMERA + OFFSET_HOLD_LINE; //dist from "Stossstange" to virtual hold line
+	} else {
+		m_distanceZero = 0.0;
+	}
+	m_dist2crossing = m_distanceZero;  					//dist from "Stossstange" to virtual hold line
+	if (m_velocityZero < MIDDLE_SPEED) {
+		m_velocityZero = MIDDLE_SPEED;
+	}
+	m_stoppingProcessActive = tTrue;
+
+	RETURN_NOERROR;
+}
+
+
+tResult StopZebraStripesFilter::SendVelocityLT(tFloat32 fSpeed) {
+
+	cObjectPtr<IMediaSample> pNewMediaSample;
+	AllocMediaSample((tVoid**)&pNewMediaSample);
+
+	cObjectPtr<IMediaSerializer> pSerializer;
+	m_pVelocityOutput->GetMediaSampleSerializer(&pSerializer);
+	tInt nSize = pSerializer->GetDeserializedSize();
+	pNewMediaSample->AllocBuffer(nSize);
+
+   //write date to the media sample with the coder of the descriptor
+	{
+		__adtf_sample_write_lock_mediadescription(m_pVelocityOutput, pNewMediaSample, pCoderOutput);
+
+		// set the id if not already done
+		if(!m_bIDsVelocityOutput)
+		{
+			pCoderOutput->GetID("fMinVel", m_szIDMinVelocityOutput);
+			pCoderOutput->GetID("fMaxVel", m_szIDMaxVelocityOutput);
+			m_bIDsVelocityOutput = tTrue;
+		}
+
+		pCoderOutput->Set(m_szIDMinVelocityOutput, (tVoid*)&(fSpeed));
+		pCoderOutput->Set(m_szIDMaxVelocityOutput, (tVoid*)&(fSpeed));
+
+		pNewMediaSample->SetTime(pNewMediaSample->GetTime());
+	}
+
+	m_oVelocity.Transmit(pNewMediaSample);
+
+	RETURN_NOERROR;
+}
+
+
+
+tResult StopZebraStripesFilter::stopFilter()
+{
+
+	tFloat32 fSpeed = m_velocityZero;
+	InitialState();
+	LOG_INFO(cString::Format("SZSF: Filter stopped, fSpeed %f", fSpeed));
+	SendVelocityLT(fSpeed); //Anfahren
+
+	TransmitBoolValue(&m_oFinishFilter, true);
+
+	RETURN_NOERROR;
+}
+
+
+
+tResult StopZebraStripesFilter::ProcessStoppingSpeed(IMediaSample* pMediaSample){
+
+    tFloat32 fDistance = 0.0;
+	tUInt32 fTimeStamp = 0;
+	{
+		__adtf_sample_read_lock_mediadescription(m_pDistanceInput,pMediaSample, pCoder);
+
+		if (!m_bIDsDistanceSet) {
+			pCoder->GetID("f32Value", m_szIDDistanceInput);
+			pCoder->GetID("ui32ArduinoTimestamp", m_szIDTimestampDistanceInput); 
+			m_bIDsDistanceSet = tTrue;
+		}  
+
+		pCoder->Get(m_szIDDistanceInput, (tVoid*)&(fDistance));
+		pCoder->Get(m_szIDTimestampDistanceInput, (tVoid*)&(fTimeStamp));
+	
+	}
+	// calc Speed
+
+	if (m_distanceOffset == 0.0) {
+		m_distanceOffset = fDistance;
+	}
+
+	fDistance -= m_distanceOffset;
+	m_dist2crossing = m_distanceZero - fDistance;
+
+	//LOG_INFO(cString::Format("SZSF: m_dist2crossing %f", m_dist2crossing));
+	
+	tFloat32 fSpeed = m_velocityZero;
+	fstream f;	
+	if (m_dist2crossing < 1e-3) {
+
+		m_stoppingProcessActive = tFalse;
+		m_dist2crossing = 0.0;
+		
+		LOG_INFO(cString::Format("m_noTrafficCamera: %i, m_noTrafficSensor: %i", m_noTrafficCamera, m_noTrafficSensor));
+
+		if (!m_noTrafficCamera || !m_noTrafficSensor){										// Stop car if there are any obstacles
+			fSpeed = 0.0;
+
+			/*f.open("StopZebra.dat",ios::out|ios::app);
+			f << "an Haltelinie, aber nicht frei, m_noTrafficCamera " <<  m_noTrafficCamera <<  " , " << "m_noTrafficSensor " << m_noTrafficSensor <<"\n";
+			f.close();*/
+
+			m_i32TimeStampZebraStripe = _clock->GetStreamTime();
+		} else {
+			/*f.open("StopZebra.dat",ios::out|ios::app);
+			f << "an Haltelinie und frei " <<"\n";
+			f.close();*/
+
+			stopFilter(); 																	// no obstacles, drive over zebra stripes and end filter
+		}
+																	
+	} else if (m_dist2crossing<0.25){
+		
+ 		if (!m_noTrafficCamera || !m_noTrafficSensor) {									// slow down car to MIN_SPEED if there are any obstacles
+			fSpeed = MIN_SPEED;
+
+			/*f.open("StopZebra.dat",ios::out|ios::app);
+			f << "<25cm vor Haltelinie, nicht frei" <<"\n";
+			f.close();*/
+
+		} else  {
+			fSpeed = DELAY_SPEED;
+
+			/*f.open("StopZebra.dat",ios::out|ios::app);
+			f << "<25cm vor Haltelinie, frei" <<"\n";
+			f.close();*/
+															// slow down car to delay speed (so it is obvious that we've seen the zebra stripes)
+		}
+	} else if (m_dist2crossing<0.5){														// camera is watching for obstacles, slow down car to MIDDLE_SPEED if there are any obstacles 
+		if (!m_noTrafficCamera){
+			fSpeed = MIDDLE_SPEED;
+
+			/*f.open("StopZebra.dat",ios::out|ios::app);
+			f << "<50cm vor Haltelinie, nicht frei" <<"\n";
+			f.close();*/
+		}
+	} 
+
+	if (m_stoppingProcessActive || fSpeed == 0.0){
+		SendVelocityLT(fSpeed);	
+	}
+
+	RETURN_NOERROR;
+}
+
+
+tResult StopZebraStripesFilter::ProcessInputDepth(IMediaSample* pSample)
+{
+
+	// VideoInput
+	RETURN_IF_POINTER_NULL(pSample);
+
+	const tVoid* l_pSrcBuffer;
+
+	IplImage* oImg = cvCreateImage(cvSize(m_sInputFormatDepthimage.nWidth, m_sInputFormatDepthimage.nHeight), IPL_DEPTH_16U, 3);
+	RETURN_IF_FAILED(pSample->Lock(&l_pSrcBuffer));
+	oImg->imageData = (char*)l_pSrcBuffer;
+	Mat image(cvarrToMat(oImg));
+	cvReleaseImage(&oImg);
+	pSample->Unlock(l_pSrcBuffer);
+
+	Mat depthImage = Mat(m_sInputFormatDepthimage.nHeight,m_sInputFormatDepthimage.nWidth,CV_16UC1,(tVoid*)l_pSrcBuffer,m_sInputFormatDepthimage.nBytesPerLine);
+
+	m_c3 = m_c6 = m_c7 = m_c9 = 0;
+	m_c3all = m_c6all = m_c7all = m_c9all = 0;
+
+	aux3.clear();
+	aux6.clear();
+	aux7.clear();
+	aux9.clear();
+	auxObs.clear();
+
+	for (int j=25;j<180;j++) {
+		for (int i=0; i<320; i++) {
+			Point3f coordinates = Util::ComputeWorldCoordinate(2*i,2*j,depthImage.at<ushort>(j, i), 0,0);
+			coordinates.x += OFFSET_X;			
+			countObstacles(coordinates, i,j);
+		}
+	}			
+	
+	m_noTrafficCamera = checkObstacles();
+
+	/* fstream f;
+	f.open("Hinderniszaehler.dat",ios::out|ios::app);
+	f << m_c1 << ", " << m_c2 <<  ", " <<m_c4 << ", " <<m_c5 << ", " <<m_c6 << ", " <<m_c7 << ", " <<m_c8 << ", " <<m_c9  <<"\n";
+	f << m_c1all << ", " << m_c2all <<  ", " <<m_c4all << ", " <<m_c5all << ", " <<m_c6all << ", " <<m_c7all << ", " <<m_c8all << ", " <<m_c9all  <<"\n";
+	f << m_c1/(tFloat32)m_c1all << ", " << m_c2/(tFloat32)m_c2all <<  ", " << m_c4/(tFloat32)m_c4all << ", " << m_c5/(tFloat32)m_c5all << ", " << m_c6/(tFloat32)m_c6all << ", " << m_c7/(tFloat32)m_c7all << ", " << m_c8/(tFloat32)m_c8all << ", " << m_c9/(tFloat32)m_c9all  <<"\n";
+	f << m_turningMode << "\n";
+	f << m_c8_lall << ", " << m_c8_rall << "\n";
+	f << m_c8_l << ", " << m_c8_r << "\n";
+	f << m_c8_l/(tFloat32)m_c8_lall << ", " << m_c8_r/(tFloat32)m_c8_rall << "\n";
+	f.close();
+
+	fstream f2;
+	f2.open("stopTurningFilter.dat",ios::out|ios::app);
+	f2 << " m_waitingTime " << m_waiting_time  << "\n";
+	f2.close();*/
+
+
+	CreateAndTransmitGCL();
+
+	
+	RETURN_NOERROR;            
+}
+
+void StopZebraStripesFilter::countObstacles(Point3f &p, int i, int j) {
+
+	
+	if (p.x > -0.65 - NEXT_TO_LANE_X && p.x <= -0.65 && p.z > OFFSET_CAMERA + OFFSET_HOLD_LINE + m_dist2crossing && p.z < OFFSET_CAMERA + OFFSET_HOLD_LINE + m_dist2crossing + m_zebraLength) { 
+
+		// left pedestrian path
+		if (p.y < 0.22 - OBJECT_HEIGHT) {
+			++m_c6;
+			if(m_showGCL) {auxObs.push_back(i); auxObs.push_back(j);}
+		}
+		++m_c6all;
+		if(m_showGCL) {aux6.push_back(i); aux6.push_back(j);}
+
+	} else if (p.x > -0.65 && p.x < -0.185 && p.z > OFFSET_CAMERA + OFFSET_HOLD_LINE + m_dist2crossing && p.z < OFFSET_CAMERA + OFFSET_HOLD_LINE + m_dist2crossing + m_zebraLength) { 
+
+		// left lane
+		if (p.y < 0.22 - OBJECT_HEIGHT) {
+			++m_c9;
+			if(m_showGCL) {auxObs.push_back(i); auxObs.push_back(j);}
+		}
+		++m_c9all;
+		if(m_showGCL) {aux9.push_back(i); aux9.push_back(j);}
+
+	} else if (p.x >= -0.185 && p.x < 0.28 && p.z > OFFSET_CAMERA + OFFSET_HOLD_LINE + m_dist2crossing && p.z < OFFSET_CAMERA + OFFSET_HOLD_LINE + m_dist2crossing + m_zebraLength) {
+
+		//right lane
+		if (p.y < 0.22 - OBJECT_HEIGHT) {
+			++m_c3;
+			if(m_showGCL) {auxObs.push_back(i); auxObs.push_back(j);}
+		}
+		++m_c3all;
+		if(m_showGCL) {aux3.push_back(i); aux3.push_back(j);}
+
+	} else if (p.x >= 0.28 && p.x < 0.28 + NEXT_TO_LANE_X && p.z > OFFSET_CAMERA + OFFSET_HOLD_LINE + m_dist2crossing && p.z < OFFSET_CAMERA + OFFSET_HOLD_LINE + m_dist2crossing + m_zebraLength) {
+		
+		// right pedestrian path
+		if (p.y < 0.22 - OBJECT_HEIGHT) {
+			++m_c7;
+			if(m_showGCL) {auxObs.push_back(i); auxObs.push_back(j);}
+		}
+		++m_c7all;
+		if(m_showGCL) {aux7.push_back(i); aux7.push_back(j);}
+
+	} 
+}
+
+tBool StopZebraStripesFilter::checkObstacles() {
+	
+	static const float pObsLane = 0.05;
+	static const float pObsPedestrian = 0.05;
+
+	tBool noObstacle = tFalse;
+
+	++m_c3all;
+	++m_c6all;
+	++m_c7all;
+	++m_c9all;
+
+	if (m_c6/(tFloat32)m_c6all < pObsPedestrian && m_c9/(tFloat32)m_c9all < pObsLane && m_c3/(tFloat32)m_c3all < pObsLane && m_c7/(tFloat32)m_c7all< pObsPedestrian) {
+		noObstacle = tTrue;
+	}
+
+
+	if (noObstacle) {
+		++m_good_frame_count;	
+		m_waiting_time = 0.08;	
+	} else {
+		++m_bad_frame_count;
+	}
+
+	if (m_bad_frame_count >= 2) { // mindestens zwei schlechte dicht hintereinander
+		m_good_frame_count = 0; // fange von vorne an
+		m_bad_frame_count = 0;
+		m_waiting_time = 0.2;
+		return tFalse;
+	} else if (m_good_frame_count >= 4) { // 4 gute mit maximal einem schlechten dazwischen
+		m_bad_frame_count	= 0;
+		return tTrue;
+	} else {
+		return tFalse;
+	}
+}
+
+tResult StopZebraStripesFilter::CreateAndTransmitGCL()
+{
+    // just draw gcl if the pin is connected and GCL mode is enabled
+    if (!m_oGCLOutput.IsConnected() || !m_showGCL) {
+        RETURN_NOERROR;
+    }
+
+    // create a mediasample
+    cObjectPtr<IMediaSample> pSample;
+    RETURN_IF_FAILED(AllocMediaSample((tVoid**)&pSample));
+
+    RETURN_IF_FAILED(pSample->AllocBuffer(1024*2048));
+
+    pSample->SetTime(_clock->GetStreamTime());
+
+    tUInt32* aGCLProc;
+    RETURN_IF_FAILED(pSample->WriteLock((tVoid**)&aGCLProc));
+
+    tUInt32* pc = aGCLProc; 
+
+
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(255, 185, 15).GetRGBA());	
+	for (size_t i = 0; i < aux3.size(); i+=2) {
+		cGCLWriter::StoreCommand(pc, GCL_CMD_FILLRECT, aux3[i]*2-1, aux3[i+1]*2-1, aux3[i]*2+1, aux3[i+1]*2+1); 
+	}
+
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(255, 70, 0).GetRGBA());	
+	for (size_t i = 0; i < aux6.size(); i+=2) {
+		cGCLWriter::StoreCommand(pc, GCL_CMD_FILLRECT, aux6[i]*2-1, aux6[i+1]*2-1, aux6[i]*2+1, aux6[i+1]*2+1); 
+	}
+
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(100, 255, 255).GetRGBA());	
+	for (size_t i = 0; i < aux7.size(); i+=2) {
+		cGCLWriter::StoreCommand(pc, GCL_CMD_FILLRECT, aux7[i]*2-1, aux7[i+1]*2-1, aux7[i]*2+1, aux7[i+1]*2+1); 
+	}
+
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(0, 153, 0).GetRGBA());	
+	for (size_t i = 0; i < aux9.size(); i+=2) {
+		cGCLWriter::StoreCommand(pc, GCL_CMD_FILLRECT, aux9[i]*2-1, aux9[i+1]*2-1, aux9[i]*2+1, aux9[i+1]*2+1); 
+	}
+
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(0, 0, 255).GetRGBA());	
+	for (size_t i = 0; i < auxObs.size(); i+=2) {
+		cGCLWriter::StoreCommand(pc, GCL_CMD_FILLRECT, auxObs[i]*2-1, auxObs[i+1]*2-1, auxObs[i]*2+1, auxObs[i+1]*2+1); 
+	}
+
+	
+	cString strText = cString::FromInt32(m_good_frame_count);
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(255, 255, 255).GetRGBA());	
+	cGCLWriter::StoreCommand(pc, GCL_CMD_TEXT, 10, 20, strText.GetLength());
+	cGCLWriter::StoreData(pc, strText.GetLength(), strText.GetPtr());
+
+	strText = cString::FromInt32(m_bad_frame_count);
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(255, 255, 255).GetRGBA());	
+	cGCLWriter::StoreCommand(pc, GCL_CMD_TEXT, 10, 40, strText.GetLength());
+	cGCLWriter::StoreData(pc, strText.GetLength(), strText.GetPtr());
+
+	strText = cString::FromInt32(m_good_us_count);
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(255, 255, 255).GetRGBA());	
+	cGCLWriter::StoreCommand(pc, GCL_CMD_TEXT, 10, 70, strText.GetLength());
+	cGCLWriter::StoreData(pc, strText.GetLength(), strText.GetPtr());
+
+	strText = cString::FromInt32(m_bad_us_count);
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(255, 255, 255).GetRGBA());	
+	cGCLWriter::StoreCommand(pc, GCL_CMD_TEXT, 10, 90, strText.GetLength());
+	cGCLWriter::StoreData(pc, strText.GetLength(), strText.GetPtr());
+
+
+	strText = cString::FromFloat64(static_cast<tFloat64>(m_US_FL));
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(255, 255, 255).GetRGBA());	
+	cGCLWriter::StoreCommand(pc, GCL_CMD_TEXT, 10, 120, strText.GetLength());
+	cGCLWriter::StoreData(pc, strText.GetLength(), strText.GetPtr());
+
+	strText = cString::FromFloat64(static_cast<tFloat64>(m_US_FCL));
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(255, 255, 255).GetRGBA());	
+	cGCLWriter::StoreCommand(pc, GCL_CMD_TEXT, 90, 120, strText.GetLength());
+	cGCLWriter::StoreData(pc, strText.GetLength(), strText.GetPtr());
+
+	strText = cString::FromFloat64(static_cast<tFloat64>(m_US_FC));
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(255, 255, 255).GetRGBA());	
+	cGCLWriter::StoreCommand(pc, GCL_CMD_TEXT, 170, 120, strText.GetLength());
+	cGCLWriter::StoreData(pc, strText.GetLength(), strText.GetPtr());
+
+	strText = cString::FromFloat64(static_cast<tFloat64>(m_US_FCR));
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(255, 255, 255).GetRGBA());	
+	cGCLWriter::StoreCommand(pc, GCL_CMD_TEXT, 250, 120, strText.GetLength());
+	cGCLWriter::StoreData(pc, strText.GetLength(), strText.GetPtr());
+
+
+	strText = cString::FromFloat64(static_cast<tFloat64>(0.90 + m_dist2crossing));
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(255, 255, 255).GetRGBA());	
+	cGCLWriter::StoreCommand(pc, GCL_CMD_TEXT, 10, 140, strText.GetLength());
+	cGCLWriter::StoreData(pc, strText.GetLength(), strText.GetPtr());
+
+	strText = cString::FromFloat64(static_cast<tFloat64>(0.70 + OFFSET_HOLD_LINE + m_dist2crossing));
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(255, 255, 255).GetRGBA());	
+	cGCLWriter::StoreCommand(pc, GCL_CMD_TEXT, 90, 140, strText.GetLength());
+	cGCLWriter::StoreData(pc, strText.GetLength(), strText.GetPtr());
+
+	strText = cString::FromFloat64(static_cast<tFloat64>(m_zebraLength + 0.05 + OFFSET_HOLD_LINE + m_dist2crossing));
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(255, 255, 255).GetRGBA());	
+	cGCLWriter::StoreCommand(pc, GCL_CMD_TEXT, 170, 140, strText.GetLength());
+	cGCLWriter::StoreData(pc, strText.GetLength(), strText.GetPtr());
+
+	strText = cString::FromFloat64(static_cast<tFloat64>(0.35 + OFFSET_HOLD_LINE + m_dist2crossing));
+	cGCLWriter::StoreCommand(pc, GCL_CMD_FGCOL, cColor(255, 255, 255).GetRGBA());	
+	cGCLWriter::StoreCommand(pc, GCL_CMD_TEXT, 250, 140, strText.GetLength());
+	cGCLWriter::StoreData(pc, strText.GetLength(), strText.GetPtr());
+
+    cGCLWriter::StoreCommand(pc, GCL_CMD_END);
+
+    pSample->Unlock(aGCLProc);
+
+    RETURN_IF_FAILED(m_oGCLOutput.Transmit(pSample));
+    RETURN_NOERROR;
+
+}
+
+
+tResult StopZebraStripesFilter::TransmitBoolValue(cOutputPin* oPin, tBool value)
+{
+    cObjectPtr<IMediaSample> pMediaSample;
+    AllocMediaSample((tVoid**)&pMediaSample);
+
+    //allocate memory with the size given by the descriptor
+    cObjectPtr<IMediaSerializer> pSerializer;
+    m_pDescriptionBool->GetMediaSampleSerializer(&pSerializer);
+    pMediaSample->AllocBuffer(pSerializer->GetDeserializedSize());
+
+    tUInt32 ui32TimeStamp = _clock->GetStreamTime();
+
+    //write date to the media sample with the coder of the descriptor
+    {
+        __adtf_sample_write_lock_mediadescription(m_pDescriptionBool, pMediaSample, pCoderOutput);    
+
+        // set the id if not already done
+        if(!m_bIDsBoolValueOutput)
+        {
+            pCoderOutput->GetID("bValue", m_szIDBoolValueOutput);
+            pCoderOutput->GetID("ui32ArduinoTimestamp", m_szIDArduinoTimestampOutput);
+            m_bIDsBoolValueOutput = tTrue;
+        }      
+
+        // set value from sample
+        pCoderOutput->Set(m_szIDBoolValueOutput, (tVoid*)&value);     
+        pCoderOutput->Set(m_szIDArduinoTimestampOutput, (tVoid*)&ui32TimeStamp);     
+    }
+
+    pMediaSample->SetTime(_clock->GetStreamTime());
+
+    //transmit media sample over output pin
+    oPin->Transmit(pMediaSample);
+
+    RETURN_NOERROR;
+}
+
+void StopZebraStripesFilter::InitialState(){
+	m_waiting_time					= 0.08;
+	m_distanceOffset				= 0.0;
+	m_velocityZero					= 0.0;
+	m_distanceZero					= 0.0;
+	m_dist2crossing 				= 0.0;
+	m_i32StartTimeStamp				= 0;
+	m_i32TimeStampZebraStripe		= 0;
+	m_good_frame_count				= 0;
+	m_bad_frame_count				= 0;
+	m_good_us_count					= 0;
+	m_bad_us_count					= 0;
+	m_filterActive					= tFalse;
+	m_stoppingProcessActive			= tFalse;
+	m_noTrafficSensor				= tTrue; 
+	m_noTrafficCamera				= tTrue;
+	m_zebraLength 					= 0.3;
+
+}
+
+
+

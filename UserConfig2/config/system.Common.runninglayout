@@ -1,0 +1,52 @@
+<adtf:export xmlns:adtf="adtf">
+ <folder name="LaneTest">
+  <folder name="components">
+   <folder name="FilterTraceView" />
+  </folder>
+  <folder name="windows">
+   <folder Height="184" Visible="true" Width="304" name="Signal_View" />
+   <folder Height="424" Visible="true" Width="624" name="Video_Display" />
+   <folder Height="184" PosX="803" PosY="93" Visible="true" Width="304" name="AADC_Bool_Value_Generator" />
+   <folder Height="596" PosX="428" PosY="52" Width="978" name="AADC_Visualization" />
+  </folder>
+ </folder>
+ <folder name="DecisionMaking2">
+  <folder name="components">
+   <folder name="FilterTraceView" />
+  </folder>
+  <folder name="windows">
+   <folder Height="424" Visible="true" Width="624" name="Video_Display" />
+   <folder Height="184" Visible="false" Width="304" name="Signal_View" />
+   <folder Height="452" Visible="true" Width="632" name="Video_Display2" />
+   <folder Height="264" PosX="736" PosY="91" Visible="true" Width="304" name="Crossing_Maneuver_Generator2" />
+   <folder Height="424" Visible="true" Width="624" name="Video_Display4" />
+   <folder Height="596" PosX="633" PosY="11" Visible="true" Width="978" name="AADC_Visualization" />
+   <folder Height="452" Visible="true" Width="632" name="Video_Display3" />
+  </folder>
+ </folder>
+ <folder name="PLAYER">
+  <folder name="components">
+   <folder name="FilterTraceView" />
+  </folder>
+  <folder name="windows">
+   <folder Height="790" PosX="49" PosY="286" Visible="true" Width="1141" name="Video_Display" />
+   <folder Height="529" Minimized="false" PosX="720" PosY="201" Visible="true" Width="704" name="Video_Display2" />
+   <folder Height="518" PosX="726" PosY="47" Visible="true" Width="782" name="Video_Display3" />
+   <folder Height="452" PosX="898" PosY="403" Visible="false" Width="632" name="Video_Display4" />
+   <folder Height="565" PosX="-25" PosY="-1" Visible="true" Width="726" name="Video_Display5" />
+   <folder Height="514" PosX="46" PosY="226" Visible="true" Width="678" name="Video_Display6" />
+   <folder Height="452" Minimized="true" PosX="11" PosY="454" Visible="true" Width="632" name="Video_Display7" />
+   <folder Height="574" PosX="49" PosY="31" Visible="true" Width="656" name="Video_Display8" />
+   <folder Height="574" Minimized="false" PosX="28" PosY="60" Visible="false" Width="1126" name="Video_Display9" />
+  </folder>
+ </folder>
+ <folder name="CAMERA_CALIB">
+  <folder name="components">
+   <folder name="FilterTraceView" />
+  </folder>
+  <folder name="windows">
+   <folder Height="212" Visible="true" Width="312" name="AADC_Bool_Value_Generator" />
+   <folder Height="452" PosX="377" PosY="35" Visible="true" Width="632" name="Video_Display" />
+  </folder>
+ </folder>
+</adtf:export>

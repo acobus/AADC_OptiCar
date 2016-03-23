@@ -1,0 +1,992 @@
+/*
+ * Date 17.03.2016
+ */  
+
+#include <math.h>
+#include "stdafx.h"
+#include "DriveRound.h"
+#include "../../include/dist_enum.h"
+#include "../../include/lane_type.h"
+#include <fstream>
+
+#define NOT_ACTIVE 0
+#define DRIVE_LEFT 1
+#define DRIVE_RIGHT 2
+#define CRUSING 3
+#define DRIVE_BACK_RIGHT 4
+#define DRIVE_BACK_LEFT 5
+#define FINISHED 6
+
+// US front right states
+#define FRONT_NOT_SET 0
+#define FRONT_UNFREE 1
+#define FRONT_FREE 2
+
+#define ADDITIONAL_OVERTAKING_SPEED 0.5
+
+#define BUFFER_MAX_SIZE 10
+#define SET_ELEMENTS 3
+
+#define OVERTAKING_TIME 1.5
+
+// TODO: Auf anderes auto übertragen!
+//#define DRIVE_LEFT_DIST 0.75
+//#define DRIVE_RIGHT_DIST 0.75
+//#define DRIVE_BACK_RIGHT_DIST 0.75
+//#define DRIVE_BACK_LEFT_DIST 0.75
+
+
+ADTF_FILTER_PLUGIN("DriveRound", __guid, DriveRound);
+
+
+DriveRound::DriveRound(const tChar* __info)
+{
+	SetPropertyInt("Actuator Update Rate [Hz]",30);
+	SetPropertyStr("Actuator Update Rate [Hz]" NSSUBPROP_DESCRIPTION, "Defines how much updates for steering and speed controller are sent in one second (Range: 0 to 100 Hz)"); 
+	SetPropertyInt("Actuator Update Rate [Hz]" NSSUBPROP_MIN, 0); 
+	SetPropertyInt("Actuator Update Rate [Hz]" NSSUBPROP_MAX, 100);
+
+	SetPropertyFloat("Default Speed",0);
+	SetPropertyStr("Default Speed" NSSUBPROP_DESCRIPTION, "Defines the default speed [m/s] which is transmitted when nothing is read from the list");
+	SetPropertyBool("Default Speed" NSSUBPROP_ISCHANGEABLE, tTrue); 
+
+	SetPropertyFloat("Default Steering",90);
+	SetPropertyStr("Default Steering" NSSUBPROP_DESCRIPTION, "Defines the default steering [servo angle] which is transmitted when nothing is read from the list");
+	SetPropertyFloat("Default Steering" NSSUBPROP_MIN, 60); 
+	SetPropertyFloat("Default Steering" NSSUBPROP_MAX, 120);
+	SetPropertyBool("Default Steering" NSSUBPROP_ISCHANGEABLE, tTrue); 
+
+	SetPropertyFloat("Time Stretch Factor",1.52);
+	SetPropertyStr("Time Stretch Factor" NSSUBPROP_DESCRIPTION, "Time Stretch Factor");
+	SetPropertyFloat("Time Stretch Factor" NSSUBPROP_MIN, 0.0);
+	SetPropertyBool("Time Stretch Factor" NSSUBPROP_ISCHANGEABLE, tTrue);
+
+}
+
+DriveRound::~DriveRound()
+{
+}
+
+
+tResult DriveRound::Init(tInitStage eStage, __exception)
+{
+	RETURN_IF_FAILED(cFilter::Init(eStage, __exception_ptr));
+
+	// pins need to be created at StageFirst
+	if (eStage == StageFirst)    {
+
+		//get the description manager for this filter
+		cObjectPtr<IMediaDescriptionManager> pDescManager;
+		RETURN_IF_FAILED(_runtime->GetObject(OID_ADTF_MEDIA_DESCRIPTION_MANAGER,IID_ADTF_MEDIA_DESCRIPTION_MANAGER,(tVoid**)&pDescManager,__exception_ptr));
+
+		//get description for sensor data pins
+		tChar const * strDescSignalValue = pDescManager->GetMediaDescription("tSignalValue");	
+		RETURN_IF_POINTER_NULL(strDescSignalValue);	
+		//get mediatype for ultrasonic sensor data pins
+		cObjectPtr<IMediaType> pTypeSignalValue = new cMediaType(0, 0, 0, "tSignalValue", strDescSignalValue, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+
+		// Get description for bool values
+		tChar const * strDescBoolSignalValue = pDescManager->GetMediaDescription("tBoolSignalValue");	
+		RETURN_IF_POINTER_NULL(strDescBoolSignalValue);	
+		cObjectPtr<IMediaType> pTypeBoolSignalValue = new cMediaType(0, 0, 0, "tBoolSignalValue", strDescBoolSignalValue, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+		
+		// Media Description LaneTracking Velocity
+		tChar const * LTVelocityDescValue = pDescManager->GetMediaDescription("tLTVelocityValue");
+		RETURN_IF_POINTER_NULL(LTVelocityDescValue);
+		cObjectPtr<IMediaType> pTypeLTVelocityValue = new cMediaType(0, 0, 0, "tLTVelocityValue", LTVelocityDescValue, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+
+		// Get description for tInt32
+		tChar const * strDescInt32SignalValue = pDescManager->GetMediaDescription("tInt32SignalValue");	
+		RETURN_IF_POINTER_NULL(strDescInt32SignalValue);	 
+		cObjectPtr<IMediaType> pTypeInt32SignalValue = new cMediaType(0, 0, 0, "tInt32SignalValue", strDescInt32SignalValue, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+
+
+		//create input pin for starting
+		RETURN_IF_FAILED(m_iStart.Create("Start", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));
+		RETURN_IF_FAILED(RegisterPin(&m_iStart));
+		RETURN_IF_FAILED(pTypeBoolSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pStartInput));
+
+		//create pin for distance overall of wheel right data
+		RETURN_IF_FAILED(m_iDistanceOverallRight.Create("distance_overall_right", pTypeSignalValue, static_cast<IPinEventSink*> (this)));
+		RETURN_IF_FAILED(RegisterPin(&m_iDistanceOverallRight));
+		RETURN_IF_FAILED(pTypeSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pDistanceOverallRightInput));
+
+		//create pin for distance overall of wheel left data
+		RETURN_IF_FAILED(m_iDistanceOverallLeft.Create("distance_overall_left", pTypeSignalValue, static_cast<IPinEventSink*> (this)));
+		RETURN_IF_FAILED(RegisterPin(&m_iDistanceOverallLeft));
+		RETURN_IF_FAILED(pTypeSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pDistanceOverallLeftInput));
+		
+		//create pin for right side ultrasonic sensor
+		RETURN_IF_FAILED(m_iUSSensorRight.Create("US_Sensor_Right", pTypeSignalValue, static_cast<IPinEventSink*> (this)));
+		RETURN_IF_FAILED(RegisterPin(&m_iUSSensorRight));
+		RETURN_IF_FAILED(pTypeSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pUSRightInput));
+
+		//create pin for front right ultrasonic sensor
+		RETURN_IF_FAILED(m_iUSSensorFrontRight.Create("US_Sensor_Front_Right", pTypeSignalValue, static_cast<IPinEventSink*> (this)));
+		RETURN_IF_FAILED(RegisterPin(&m_iUSSensorFrontRight));
+		RETURN_IF_FAILED(pTypeSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pUSFrontRightInput));
+
+
+		// Current Lanetype (Input)
+		RETURN_IF_FAILED(m_iCurrentLanetype.Create("Lane_Type", pTypeInt32SignalValue, static_cast<IPinEventSink*> (this)));
+		RETURN_IF_FAILED(RegisterPin(&m_iCurrentLanetype));
+		RETURN_IF_FAILED(pTypeInt32SignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pCurrentLanetypeInput));
+
+		//create output pin for speed output data
+		RETURN_IF_FAILED(m_oSpeed.Create("Speed", pTypeSignalValue, static_cast<IPinEventSink*> (this)));	
+		RETURN_IF_FAILED(RegisterPin(&m_oSpeed));
+		RETURN_IF_FAILED(pTypeSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pSpeedOutput));
+
+		//create output pin for steering output data
+		RETURN_IF_FAILED(m_oSteering.Create("Steering", pTypeSignalValue, static_cast<IPinEventSink*> (this)));	
+		RETURN_IF_FAILED(RegisterPin(&m_oSteering));	
+		RETURN_IF_FAILED(pTypeSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pSteeringOutput));
+		
+		// State of Lane Following (Output)
+		RETURN_IF_FAILED(m_oStateLF.Create("State_Lane_Following", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));
+		RETURN_IF_FAILED(RegisterPin(&m_oStateLF));
+		RETURN_IF_FAILED(pTypeBoolSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pBoolStateLFOutput));
+		
+		// State of EmergencySTOP and WheelSpeedControler (Output)
+		RETURN_IF_FAILED(m_oStateES_WSC.Create("State_ES_WSC", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));
+		RETURN_IF_FAILED(RegisterPin(&m_oStateES_WSC));
+		RETURN_IF_FAILED(pTypeBoolSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pBoolState_ES_WSC_Output));
+
+		//create output pin for turn-right light output data
+		RETURN_IF_FAILED(m_oTurnRight.Create("turn-right_Light", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));	
+		RETURN_IF_FAILED(RegisterPin(&m_oTurnRight));
+		RETURN_IF_FAILED(pTypeBoolSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pTurnRightLightOutput));
+
+		//create output pin for turn-left light output data
+		RETURN_IF_FAILED(m_oTurnLeft.Create("turn-left_Light", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));	
+		RETURN_IF_FAILED(RegisterPin(&m_oTurnLeft));
+		RETURN_IF_FAILED(pTypeBoolSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pTurnLeftLightOutput));
+		
+		// StateToDM (Output)
+		RETURN_IF_FAILED(m_oStateToDM.Create("StateToDM", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));	
+		RETURN_IF_FAILED(RegisterPin(&m_oStateToDM));
+		RETURN_IF_FAILED(pTypeBoolSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pStateToDMOutput));
+
+		RETURN_NOERROR;
+	}
+	else if(eStage == StageNormal)
+	{
+
+	}
+	else if(eStage == StageGraphReady)
+	{
+
+		m_Active 					= NOT_ACTIVE;
+		m_wheelLeftFirst 			= tTrue;
+		m_wheelRightFirst 			= tTrue;
+		m_bufferToEmptyFront 		= tTrue;
+		m_bufferToEmptySide 		= tTrue;
+
+		m_sideCounter				= 0;
+		m_frontCounter				= 0;
+
+		m_distanceOffset 			= 0.0;
+
+		m_activationTime 			= 0;
+
+		m_driveLeft					= 0.0;
+		m_driveBackLeft				= 0.0;
+		m_driveRight				= 0.0;
+		m_driveBackRight 			= 0.0;
+		
+		m_USFrontState 				= FRONT_NOT_SET;
+
+		m_Lanetype 					= LANE_STRAIGHT;
+	
+		// Id's set
+		m_bStateInputSet			= tFalse;
+		m_bDistanceOverallRightSet 	= tFalse;
+		m_bDistanceOverallLeftSet 	= tFalse;
+		m_bLanetypeInputSet 		= tFalse;
+		m_bSteeringOutputSet	 	= tFalse;
+		m_bSpeedOutputSet 			= tFalse;
+		m_bStateLFOutputSet 		= tFalse;
+		m_bState_ES_WSC_OutputSet 	= tFalse;
+		m_bUSRightInputSet 			= tFalse;
+		m_bUSFrontRightInputSet		= tFalse;
+		m_bTurnRightLightOutputSet 	= tFalse;
+		m_bTurnLeftLightOutputSet 	= tFalse;
+		m_bStateToDMOutputSet 		= tFalse;
+
+	}
+
+	RETURN_NOERROR;
+}
+
+tResult DriveRound::Shutdown(tInitStage eStage, __exception)
+{ 
+	return cFilter::Shutdown(eStage, __exception_ptr);
+}
+
+tResult DriveRound::OnPinEvent(IPin* pSource,
+		tInt nEventCode,
+		tInt nParam1,
+		tInt nParam2,
+		IMediaSample* pMediaSample)
+{
+	// first check what kind of event it is
+	if (nEventCode == IPinEventSink::PE_MediaSampleReceived) {
+		// so we received a media sample, so this pointer better be valid.
+		RETURN_IF_POINTER_NULL(pMediaSample);
+
+		// Allways receive current lanetype
+		if (pSource == &m_iCurrentLanetype)
+		{
+			processLanetype(pMediaSample);
+		}
+
+		if (pSource == &m_iStart && (m_Active == NOT_ACTIVE || m_Active == FINISHED) ){			
+			SetState(pMediaSample);
+		}
+
+		else if (pSource == &m_iDistanceOverallLeft && (m_Active == DRIVE_RIGHT || m_Active == DRIVE_BACK_RIGHT) ){
+			processDistanceLeft(pMediaSample);
+		}
+
+		else if (pSource == &m_iDistanceOverallRight && (m_Active == DRIVE_LEFT || m_Active == DRIVE_BACK_LEFT)){
+			processDistanceRight(pMediaSample);
+		}
+		
+		else if (pSource == &m_iUSSensorRight && m_Active == CRUSING){
+			processUSRight(pMediaSample);
+		}
+
+		else if (pSource == &m_iUSSensorFrontRight && m_Active == CRUSING){
+			processUSFrontRight(pMediaSample);
+		}
+
+	}
+
+	RETURN_NOERROR;
+}
+
+/*
+
+ * This Method sets state of this filter
+ */
+tResult DriveRound::SetState(IMediaSample* pMediaSample){
+
+	tBool run  	= tFalse;
+
+	{
+		__adtf_sample_read_lock_mediadescription(m_pStartInput ,pMediaSample, pCoder);    
+
+		if (!m_bStateInputSet){
+			pCoder->GetID("bValue", m_szIDStateInput);		
+			m_bStateInputSet = tTrue;
+		}
+
+		pCoder->Get(m_szIDStateInput, (tVoid*)&run);         
+	}
+
+LOG_INFO(cString::Format("DR: received state %i", run) );
+
+	if (run){
+		// Set default values to start
+		m_Active 				= DRIVE_LEFT;
+		m_wheelLeftFirst 		= tTrue;
+		m_wheelRightFirst 		= tTrue;
+		m_bufferToEmptyFront 	= tTrue;
+		m_bufferToEmptySide 	= tTrue;
+		m_USRightBuffer.clear();
+		m_USFrontRightBuffer.clear();
+		m_sideCounter			= 0;
+		m_frontCounter			= 0;
+		m_driveLeft				= 0.0;
+		m_driveBackLeft			= 0.0;
+		m_driveRight			= 0.0;
+		m_driveBackRight 		= 0.0;
+		m_activationTime 		= 0;
+		m_USFrontState 			= FRONT_NOT_SET;
+		SetState_ES_WSC(tFalse);
+		SetState_LF(tFalse);
+		
+		// Set lights
+		SetLeftLight(tTrue);
+
+		// Send own state to DM
+		sendStateToDM(tTrue);
+	}
+
+	RETURN_NOERROR;	
+}
+
+/*
+ * This method processes an incoming change of the lanetype
+ */
+tResult DriveRound::processLanetype(IMediaSample* pMediaSample){
+	
+	tInt32 lanetype = UNKNOWN_LANE;
+
+	{
+		__adtf_sample_read_lock_mediadescription(m_pCurrentLanetypeInput, pMediaSample, pCoder);    
+
+		if (!m_bLanetypeInputSet){
+			pCoder->GetID("intValue", m_szIDLanetypeInput);		
+			m_bLanetypeInputSet = tTrue;
+		}
+
+		pCoder->Get(m_szIDLanetypeInput, (tVoid*)&lanetype);         
+	}
+
+	// Ignore unknown lanetype	
+	m_Lanetype = 	(lanetype == UNKNOWN_LANE) ? m_Lanetype : lanetype;
+
+	RETURN_NOERROR;
+}
+
+/*
+ * This method works with incoming overall distances of the right wheel
+ */
+tResult DriveRound::processDistanceRight(IMediaSample* pMediaSample){
+
+	tFloat32 distance = 0;
+
+	{
+		__adtf_sample_read_lock_mediadescription(m_pDistanceOverallRightInput, pMediaSample, pCoderOutput);
+
+		if (!m_bDistanceOverallRightSet){
+			pCoderOutput->GetID("f32Value", m_szIDDistanceOverallRightInput);
+			m_bDistanceOverallRightSet = tTrue;
+		}
+
+		pCoderOutput->Get(m_szIDDistanceOverallRightInput, (tVoid*)&(distance));
+	}
+
+	// Set Distance Offset
+	if (m_wheelRightFirst){
+		m_distanceOffset = distance;
+		m_wheelRightFirst = tFalse;		
+	}
+
+	// Make behaviour dependend on the current lanetype
+	if (m_Active == DRIVE_LEFT && m_driveLeft == 0.0){
+		/*switch (m_Lanetype){
+
+			case LANE_STRAIGHT:
+				m_driveLeft 		= DRIVE_LEFT_DIST;
+				m_driveRight 		= DRIVE_RIGHT_DIST;
+				break;
+		
+			case LANE_LEFT:
+				m_driveLeft  		= DRIVE_LEFT_DIST_LEFTCURVE;
+				m_driveRight 		= DRIVE_RIGHT_DIST_LEFTCURVE;
+				break;
+
+			case LANE_RIGHT:
+				m_driveLeft 		= DRIVE_LEFT_DIST_RIGHTCURVE;
+				m_driveRight 		= DRIVE_RIGHT_DIST_RIGHTCURVE;
+				break;
+
+			default: 
+				RETURN_NOERROR;
+		}*/
+		m_driveLeft 		= DRIVE_LEFT_DIST;
+		m_driveRight 		= DRIVE_RIGHT_DIST;
+	}
+
+//LOG_INFO(cString::Format("DR (right): distance-m_distanceOffset = %f, Lanetype = %i", distance-m_distanceOffset, m_Lanetype) );
+
+	// set next state
+	if  ( (distance > m_distanceOffset + m_driveLeft) && m_Active == DRIVE_LEFT ){
+		m_Active 	= DRIVE_RIGHT;
+		RETURN_NOERROR;
+	}
+	else if ( (distance > m_distanceOffset + m_driveBackLeft) && m_Active == DRIVE_BACK_LEFT ){
+		m_Active 	= NOT_ACTIVE;
+		
+		// Set Lights off
+		SetRightLight(tFalse);
+		sendStateToDM(tFalse);
+		SetState_ES_WSC(tTrue);
+		SetState_LF(tTrue);
+		RETURN_NOERROR;
+	}
+
+	TransmitControls();
+
+	RETURN_NOERROR;
+}
+
+/*
+ * This method works with incoming overall distances of the right wheel
+ */
+tResult DriveRound::processDistanceLeft(IMediaSample* pMediaSample){
+
+	tFloat32 distance = 0;
+
+	{
+		__adtf_sample_read_lock_mediadescription(m_pDistanceOverallLeftInput, pMediaSample, pCoderOutput);
+
+		if (!m_bDistanceOverallLeftSet){
+			pCoderOutput->GetID("f32Value", m_szIDDistanceOverallLeftInput);
+			m_bDistanceOverallLeftSet = tTrue;
+		}
+
+		pCoderOutput->Get(m_szIDDistanceOverallLeftInput, (tVoid*)&(distance));
+	}
+
+	// Set Distance Offset
+	if (m_wheelLeftFirst){
+		m_distanceOffset = distance;
+		m_wheelLeftFirst = tFalse;		
+	}
+
+	// Make behaviour dependend on the current lanetype
+	if (m_Active == DRIVE_BACK_RIGHT && m_driveBackLeft == 0.0){
+		/*switch (m_Lanetype){
+
+			case LANE_STRAIGHT:
+				m_driveBackLeft 	= DRIVE_BACK_LEFT_DIST;
+				m_driveBackRight 	= DRIVE_BACK_RIGHT_DIST;
+				break;
+		
+			case LANE_LEFT:
+				m_driveBackLeft 	= DRIVE_BACK_LEFT_DIST_LEFTCURVE;
+				m_driveBackRight 	= DRIVE_BACK_RIGHT_DIST_LEFTCURVE;
+				break;
+
+			case LANE_RIGHT:	
+				m_driveBackLeft 	= DRIVE_BACK_LEFT_DIST_RIGHTCURVE;
+				m_driveBackRight 	= DRIVE_BACK_RIGHT_DIST_RIGHTCURVE;
+				break;
+
+			default: 
+				RETURN_NOERROR;
+		}*/
+		m_driveBackLeft 	= DRIVE_BACK_LEFT_DIST;
+		m_driveBackRight 	= DRIVE_BACK_RIGHT_DIST;
+	}
+
+//LOG_INFO(cString::Format("DR (left): distance-m_distanceOffset = %f, Lanetype = %i", distance-m_distanceOffset, m_Lanetype) );
+
+	// Set next state
+	if ( (distance > m_distanceOffset + m_driveRight) && m_Active == DRIVE_RIGHT ){
+		m_Active 	= CRUSING;
+		m_activationTime 	= _clock->GetStreamTime();
+	//fstream ff;
+	//ff.open("AdaptiveVelocity", ios::out|ios::app);
+	//ff << "START CRUISE! \n";
+	//ff.flush();
+	//ff.close();
+		SetState_ES_WSC(tTrue);
+		SetState_LF(tTrue);
+		//Set Lights
+		SetRightLight(tTrue);
+		RETURN_NOERROR;	
+		//m_Active = FINISHED;
+	}
+	else if( (distance > m_distanceOffset + m_driveBackRight) && m_Active == DRIVE_BACK_RIGHT ){
+		m_Active 	= DRIVE_BACK_LEFT;	
+		RETURN_NOERROR;	
+	}
+
+	TransmitControls();
+
+	RETURN_NOERROR;
+}
+
+/*
+ * This method processes the signal of the right US sensor, so we know that we 
+ * are behind the obstacle
+ */
+tResult DriveRound::processUSRight(IMediaSample* pMediaSample){
+
+	tFloat32 distance = 0;
+
+	{
+		__adtf_sample_read_lock_mediadescription(m_pUSRightInput, pMediaSample, pCoderOutput);
+
+		if (!m_bUSRightInputSet){
+			pCoderOutput->GetID("f32Value", m_szIDUSRightInput);
+			m_bUSRightInputSet = tTrue;
+		}
+
+		pCoderOutput->Get(m_szIDUSRightInput, (tVoid*)&(distance));
+	}
+	//LOG_INFO(cString::Format("DR: US_Distance = %f", distance) );
+
+	m_USRightBuffer.push_back(distance);
+
+	size_t bufferSize 	= m_USRightBuffer.size();
+
+/*	fstream ff;
+	ff.open("AdaptiveVelocity", ios::out|ios::app);
+	ff << "US_Right_Distance = " << distance << "\n";
+	ff.flush();
+	ff.close();*/
+
+	// Compare at least 10 elements
+	if (bufferSize < BUFFER_MAX_SIZE){
+		RETURN_NOERROR;
+	}
+
+	// Ignore first 3*10 values
+	/*else if (m_bufferToEmptySide && bufferSize == BUFFER_MAX_SIZE){
+		if(m_sideCounter 	== 3){ 
+			m_USRightBuffer.clear();
+			m_bufferToEmptySide 	= tFalse;
+		} else{
+			m_USRightBuffer.clear();
+			m_sideCounter++;
+		}
+		RETURN_NOERROR;
+	} */
+	
+	// Compare maximal the 10 last elements
+	else if (bufferSize > BUFFER_MAX_SIZE){
+		m_USRightBuffer.pop_front();
+		bufferSize--;
+	}
+
+	// Calcluate three smalest value:
+	tFloat32 smallElements[SET_ELEMENTS] 	= {500, 500, 500};
+	for (size_t i = 0; i < bufferSize; i++){
+		for (int j = 0; j < SET_ELEMENTS; j++){
+			if(m_USRightBuffer.at(i) < smallElements[j]){
+				switch (j){
+					case 0:
+						smallElements[j+1]	= smallElements[j];
+						smallElements[j] 	= m_USRightBuffer.at(i);
+						break;
+
+					case 1:
+						smallElements[j+1]	= smallElements[j];
+						smallElements[j] 	= m_USRightBuffer.at(i);
+						break;
+
+					case 2:
+						smallElements[j] 	= m_USRightBuffer.at(i);
+						break;										
+				}
+			}
+		}
+	}
+	
+	// Calculate mean
+	tFloat32 buffer 	= 0.0;
+	for (int j = 0; j < SET_ELEMENTS; j++){
+		buffer += smallElements[j];
+	}
+
+	/*fstream fff;
+	fff.open("AdaptiveVelocity", ios::out|ios::app);
+	fff << "US_Right_Mean_Distance = " << buffer / SET_ELEMENTS << "\n";
+	fff.flush();
+	fff.close();*/
+	
+	// Drive back to road if there is nothing before or beside us
+	if ((m_USFrontState == FRONT_FREE && buffer / SET_ELEMENTS > 0.4) || (_clock->GetStreamTime()-m_activationTime)/1000000.0 > OVERTAKING_TIME){
+		SetState_ES_WSC(tFalse);
+		SetState_LF(tFalse);
+		LOG_INFO(cString::Format("DR: Passed") );
+	//fstream ff;
+	//ff.open("AdaptiveVelocity", ios::out|ios::app);
+	//ff << "FINISHED CRUISE! \n";
+	//ff.flush();
+	//ff.close();
+		m_wheelLeftFirst 	= tTrue;
+		m_wheelRightFirst 	= tTrue;	
+		m_Active = DRIVE_BACK_RIGHT;
+	}
+
+	RETURN_NOERROR;
+}
+
+/*
+ * This method processes input of the front right US sensor, so we know
+ * that there is no obstacle before us anymore
+ */
+tResult DriveRound::processUSFrontRight(IMediaSample* pMediaSample){
+
+	tFloat32 distance = 0.0;
+
+	{
+		__adtf_sample_read_lock_mediadescription(m_pUSFrontRightInput ,pMediaSample, pCoder);    
+
+		if (!m_bUSFrontRightInputSet){
+			pCoder->GetID("f32Value", m_szIDUSFrontRightInput);		
+			m_bUSFrontRightInputSet = tTrue;
+		}
+
+		pCoder->Get(m_szIDUSFrontRightInput, (tVoid*)&distance);         
+	}
+
+	m_USFrontRightBuffer.push_back(distance);
+
+	size_t bufferSize 	= m_USFrontRightBuffer.size();
+
+/*	fstream ff;
+	ff.open("AdaptiveVelocity", ios::out|ios::app);
+	ff << "US_Front_Right_Distance = " << distance << "\n";
+	ff.flush();
+	ff.close();*/
+
+	// Compare at least 10 elements
+	if (bufferSize < BUFFER_MAX_SIZE){
+		RETURN_NOERROR;
+	}
+
+	// Ignore first 3*10 values
+	else if (m_bufferToEmptyFront && bufferSize == BUFFER_MAX_SIZE){
+		if(m_frontCounter == 3){	
+			m_USFrontRightBuffer.clear();
+			m_bufferToEmptyFront 	= tFalse;
+		} else{
+			m_USFrontRightBuffer.clear();
+			m_frontCounter++;
+		}
+		RETURN_NOERROR;
+	}
+
+	// Compare maximal the 10 last elements
+	else if (bufferSize > BUFFER_MAX_SIZE){
+		m_USFrontRightBuffer.pop_front();
+		bufferSize--;
+	}
+
+	// Calcluate three smalest value:
+	tFloat32 smallElements[SET_ELEMENTS] 	= {500, 500, 500};
+	for (size_t i = 0; i < bufferSize; i++){
+		for (int j = 0; j < SET_ELEMENTS; j++){
+			if(m_USFrontRightBuffer.at(i) < smallElements[j]){
+				switch (j){
+					case 0:
+						smallElements[j+1]	= smallElements[j];
+						smallElements[j] 	= m_USFrontRightBuffer.at(i);
+						break;
+
+					case 1:
+						smallElements[j+1]	= smallElements[j];
+						smallElements[j] 	= m_USFrontRightBuffer.at(i);
+						break;
+
+					case 2:
+						smallElements[j] 	= m_USFrontRightBuffer.at(i);
+						break;										
+				}
+			}
+		}
+	}
+	
+	// Calculate mean
+	tFloat32 buffer 	= 0.0;
+	for (int j = 0; j < SET_ELEMENTS; j++){
+		buffer += smallElements[j];
+	}
+
+
+/*
+	fstream fff;
+	fff.open("AdaptiveVelocity", ios::out|ios::app);
+	fff << "US_Front_Right_Mean_Distance = " << buffer / SET_ELEMENTS << "\n"; // size
+	fff.flush();
+	fff.close();*/
+
+	// Set flag whether this sensor is free or not
+	if (buffer/SET_ELEMENTS > 0.5){ //size
+		m_USFrontState 	= FRONT_FREE;
+	}else{
+		m_USFrontState  = FRONT_UNFREE;
+	}		
+	
+	RETURN_NOERROR;
+}
+
+/*
+ * This method transmits steering and speed control dependend on the current 'DriveRoundCase'
+ */
+tResult DriveRound::TransmitControls(){
+
+	tFloat32 steering 	= 0.0;
+	tFloat32 speed 		= 0.0;
+
+	switch (m_Active){
+
+		case NOT_ACTIVE:
+			RETURN_NOERROR;
+
+		case DRIVE_LEFT:
+			steering 	= 60;
+			speed 		= 2.0;//1.5;
+			break;
+			
+		case DRIVE_RIGHT:
+			steering 	= 120;
+			speed 		= 2.0;//1.5;
+			break;
+
+		case DRIVE_BACK_RIGHT:
+			steering  	= 120;
+			speed 		= 2.0;//1.5;
+			break;
+
+		case DRIVE_BACK_LEFT:
+			steering 	= 60;
+			speed 		= 2.0;//1.5;
+			break;			
+
+		case FINISHED:
+			steering 	= 90;
+			speed 		= 0.0;
+			break;
+			
+		default:
+			RETURN_NOERROR;
+	}
+	
+	tUInt32 ui32TimeStamp 	= 0;
+
+	// Steering
+	{
+
+		//create new media sample
+		cObjectPtr<IMediaSample> pNewMediaSample;
+		RETURN_IF_FAILED(AllocMediaSample((tVoid**)&pNewMediaSample));
+
+		//allocate memory with the size given by the descriptor
+		cObjectPtr<IMediaSerializer> pSerializer;
+		m_pSteeringOutput->GetMediaSampleSerializer(&pSerializer);
+		tInt nSize = pSerializer->GetDeserializedSize();
+		RETURN_IF_FAILED(pNewMediaSample->AllocBuffer(nSize));
+
+		{
+			__adtf_sample_write_lock_mediadescription(m_pSteeringOutput, pNewMediaSample, pCoderOutput);    
+
+			if (!m_bSteeringOutputSet){
+				pCoderOutput->GetID("f32Value", m_szIDSteeringOutput);
+				pCoderOutput->GetID("ui32Timestamp", m_szIDSteeringTimestampOutput);
+				m_bSteeringOutputSet = tTrue;
+			}
+			
+			pCoderOutput->Set(m_szIDSteeringOutput, (tVoid*)&steering);    
+			pCoderOutput->Set(m_szIDSteeringTimestampOutput, (tVoid*)&ui32TimeStamp);    
+		}
+
+		pNewMediaSample->SetTime(_clock->GetStreamTime());
+
+		RETURN_IF_FAILED(m_oSteering.Transmit(pNewMediaSample));
+
+	}
+	
+	// Speed
+	{
+		
+		//create new media sample
+		cObjectPtr<IMediaSample> pNewMediaSample;
+		RETURN_IF_FAILED(AllocMediaSample((tVoid**)&pNewMediaSample));
+
+		//allocate memory with the size given by the descriptor
+		cObjectPtr<IMediaSerializer> pSerializer;
+		m_pSpeedOutput->GetMediaSampleSerializer(&pSerializer);
+		tInt nSize = pSerializer->GetDeserializedSize();
+		RETURN_IF_FAILED(pNewMediaSample->AllocBuffer(nSize));
+
+		{
+			__adtf_sample_write_lock_mediadescription(m_pSpeedOutput, pNewMediaSample, pCoderOutput);    
+
+			if (!m_bSpeedOutputSet){
+				pCoderOutput->GetID("f32Value", m_szIDSpeedOutput);
+				pCoderOutput->GetID("ui32Timestamp", m_szIDSpeedTimestampOutput);
+				m_bSpeedOutputSet = tTrue;
+			}
+			
+			pCoderOutput->Set(m_szIDSpeedOutput, (tVoid*)&speed);    
+			pCoderOutput->Set(m_szIDSpeedTimestampOutput, (tVoid*)&ui32TimeStamp);    
+		}
+
+		pNewMediaSample->SetTime(_clock->GetStreamTime());
+
+		RETURN_IF_FAILED(m_oSpeed.Transmit(pNewMediaSample));
+	}
+
+	RETURN_NOERROR;
+}
+
+/*
+ * This Method sends a working state to the Lane Following-Module
+ */
+tResult DriveRound::SetState_LF(tBool state){   
+
+	cObjectPtr<IMediaSample> pMediaSample;
+	AllocMediaSample((tVoid**)&pMediaSample);
+
+	//allocate memory with the size given by the descriptor
+	cObjectPtr<IMediaSerializer> pSerializer;
+	m_pBoolStateLFOutput->GetMediaSampleSerializer(&pSerializer);
+	pMediaSample->AllocBuffer(pSerializer->GetDeserializedSize());
+
+	tUInt32 ui32TimeStamp = 0;
+	tBool bValue = state;
+
+	{
+		__adtf_sample_write_lock_mediadescription(m_pBoolStateLFOutput, pMediaSample, pCoder);    
+
+		if (!m_bStateLFOutputSet){
+			pCoder->GetID("bValue", m_szIDBoolValueStateLFOutput);
+			pCoder->GetID("ui32Timestamp", m_szIDTimestampStateLFOutput);
+			m_bStateLFOutputSet = tTrue;
+		}
+
+		// set value from sample
+		pCoder->Set(m_szIDBoolValueStateLFOutput, (tVoid*)&bValue);     
+		pCoder->Set(m_szIDTimestampStateLFOutput, (tVoid*)&(ui32TimeStamp));    
+	}
+
+	pMediaSample->SetTime(_clock->GetStreamTime());
+
+	m_oStateLF.Transmit(pMediaSample);
+
+	RETURN_NOERROR;    
+}
+
+/*
+ * This Method sends a working state to the EmergencySTOP and WheelSpeedControler modules
+ */
+tResult DriveRound::SetState_ES_WSC(tBool state){   
+
+	cObjectPtr<IMediaSample> pMediaSample;
+	AllocMediaSample((tVoid**)&pMediaSample);
+
+	//allocate memory with the size given by the descriptor
+	cObjectPtr<IMediaSerializer> pSerializer;
+	m_pBoolState_ES_WSC_Output->GetMediaSampleSerializer(&pSerializer);
+	pMediaSample->AllocBuffer(pSerializer->GetDeserializedSize());
+
+	tUInt32 ui32TimeStamp = 0;
+	tBool bValue = state;
+
+	{
+		__adtf_sample_write_lock_mediadescription(m_pBoolState_ES_WSC_Output, pMediaSample, pCoder);    
+
+		if (!m_bState_ES_WSC_OutputSet){
+			pCoder->GetID("bValue", m_szIDBoolValueState_ES_WSC_Output);
+			pCoder->GetID("ui32Timestamp", m_szIDTimestampState_ES_WSC_Output);
+			m_bState_ES_WSC_OutputSet = tTrue;
+		}
+
+		// set value from sample
+		pCoder->Set(m_szIDBoolValueState_ES_WSC_Output, (tVoid*)&bValue);     
+		pCoder->Set(m_szIDTimestampState_ES_WSC_Output, (tVoid*)&(ui32TimeStamp));    
+	}
+
+	pMediaSample->SetTime(_clock->GetStreamTime());
+
+	m_oStateES_WSC.Transmit(pMediaSample);
+
+	RETURN_NOERROR;   
+}
+
+/*
+ * Method to set left light
+ */
+tResult DriveRound::SetLeftLight(tBool status){	
+	
+	tUInt32 ui32TimeStamp = 0;
+
+	cObjectPtr<IMediaSample> pMediaSample;
+	AllocMediaSample((tVoid**)&pMediaSample);
+
+	//allocate memory with the size given by the descriptor
+	cObjectPtr<IMediaSerializer> pSerializer;
+	m_pTurnLeftLightOutput->GetMediaSampleSerializer(&pSerializer);
+	pMediaSample->AllocBuffer(pSerializer->GetDeserializedSize());
+
+	{
+		__adtf_sample_write_lock_mediadescription(m_pTurnLeftLightOutput, pMediaSample, pCoder);    
+
+		if (!m_bTurnLeftLightOutputSet) {
+			pCoder->GetID("bValue", m_szIDTurnLeftLightOutput);
+			pCoder->GetID("ui32Timestamp", m_szIDTurnLeftLightTimestampOutput);
+			m_bTurnLeftLightOutputSet = tTrue;
+		}
+
+		// set value from sample
+		pCoder->Set(m_szIDTurnLeftLightOutput, (tVoid*)&status);
+		pCoder->Set(m_szIDTurnLeftLightTimestampOutput, (tVoid*)&ui32TimeStamp);
+	}
+
+	pMediaSample->SetTime(_clock->GetStreamTime());
+
+	m_oTurnLeft.Transmit(pMediaSample);
+	
+	RETURN_NOERROR;
+}
+
+/*
+ * Method to set right light
+ */
+tResult DriveRound::SetRightLight(tBool status){	
+	
+	tUInt32 ui32TimeStamp = 0;
+
+	cObjectPtr<IMediaSample> pMediaSample;
+	AllocMediaSample((tVoid**)&pMediaSample);
+
+	//allocate memory with the size given by the descriptor
+	cObjectPtr<IMediaSerializer> pSerializer;
+	m_pTurnRightLightOutput->GetMediaSampleSerializer(&pSerializer);
+	pMediaSample->AllocBuffer(pSerializer->GetDeserializedSize());
+
+	{
+		__adtf_sample_write_lock_mediadescription(m_pTurnRightLightOutput, pMediaSample, pCoder);    
+
+		if (!m_bTurnRightLightOutputSet) {
+			pCoder->GetID("bValue", m_szIDTurnRightLightOutput);
+			pCoder->GetID("ui32Timestamp", m_szIDTurnRightLightTimestampOutput);
+			m_bTurnRightLightOutputSet = tTrue;
+		}
+
+		// set value from sample
+		pCoder->Set(m_szIDTurnRightLightOutput, (tVoid*)&status);
+		pCoder->Set(m_szIDTurnRightLightTimestampOutput, (tVoid*)&ui32TimeStamp);
+	}
+
+	pMediaSample->SetTime(_clock->GetStreamTime());
+
+	m_oTurnRight.Transmit(pMediaSample);
+	
+	RETURN_NOERROR;
+}
+
+/*
+ * Method to set Velocity of LaneFollowing
+ */ 
+tResult DriveRound::sendStateToDM(tBool state){
+
+	tUInt32 nTimeStamp = 0;
+
+    cObjectPtr<IMediaSample> pMediaSample;
+    AllocMediaSample((tVoid**)&pMediaSample);
+
+    cObjectPtr<IMediaSerializer> pSerializer;
+    m_pStateToDMOutput->GetMediaSampleSerializer(&pSerializer);
+    tInt nSize = pSerializer->GetDeserializedSize();
+    pMediaSample->AllocBuffer(nSize);
+
+	{
+		__adtf_sample_write_lock_mediadescription(m_pStateToDMOutput, pMediaSample, pCoder); 
+
+
+		if (!m_bStateToDMOutputSet){
+			pCoder->GetID("bValue", m_szIDStateToDMOutput);
+			pCoder->GetID("ui32ArduinoTimeStamp", m_szIDTimestampStateToDMOutput);
+			m_bStateToDMOutputSet = tTrue;
+		}
+
+    	pCoder->Set(m_szIDStateToDMOutput, (tVoid*)&(state));
+    	pCoder->Set(m_szIDTimestampStateToDMOutput, (tVoid*)&nTimeStamp);
+		
+	}
+
+	pMediaSample->SetTime(pMediaSample->GetTime());
+
+    m_oStateToDM.Transmit(pMediaSample);
+
+	RETURN_NOERROR;
+}

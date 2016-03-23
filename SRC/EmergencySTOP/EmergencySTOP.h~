@@ -1,0 +1,138 @@
+/*
+ * Date 30.01.2016
+ */
+
+#ifndef _Emergency_STOP_H_
+#define _Emergency_STOP_H_
+
+#define OID_ADTF_Emergency_STOP "adtf.example.Emergency_STOP"
+
+#include "../../include/aadc_structs.h"
+ 
+
+//*************************************************************************************************
+class EmergencySTOP : public adtf::cFilter
+{
+    ADTF_FILTER(OID_ADTF_Emergency_STOP, "EmergencySTOP", adtf::OBJCAT_DataFilter);
+
+public:
+    EmergencySTOP(const tChar* __info);
+    virtual ~EmergencySTOP();
+    cInputPin m_iSpeedController;
+    cInputPin m_iCarSpeed;
+	cInputPin m_iServoAngle;
+	cInputPin m_iStatusES;
+	cInputPin m_iUltraSonic;
+    cOutputPin m_oSpeedOut;
+    cOutputPin m_oBreaklight;
+    cOutputPin m_oDecisionMaking;
+
+protected:
+    tResult Init(tInitStage eStage, __exception);
+    tResult Shutdown(tInitStage eStage, __exception);
+
+    // implements IPinEventSink
+    tResult OnPinEvent(IPin* pSource,
+                       tInt nEventCode,
+                       tInt nParam1,
+                       tInt nParam2,
+                       IMediaSample* pMediaSample);
+private:
+    struct tProperties
+    {
+        tFloat32 fMinDistance;
+
+        tProperties()
+        {
+	    	fMinDistance = 0.2f;
+		}
+    } m_sProperties;
+
+	//booleans for Front
+    tBool speedZeroFront;
+    tBool breakingModeFrontCenter;
+	tBool breakingModeFrontCenterRight;
+	tBool breakingModeFrontCenterLeft;
+	tBool breakingModeFrontLeft;
+	tBool breakingModeFrontRight;
+	//booleans for Rear
+	tBool breakingModeRearCenter;
+	tBool breakingModeRearRight;
+	tBool breakingModeRearLeft;
+	tBool speedZeroRear;
+	//other booleans
+	tBool driveForward;
+    tBool m_emergencyBreak;
+    tBool m_stateChanged;
+	tInt AngleID;
+
+	vector<int> m_freeBuffer;
+
+	// Flag if this Filter is activated
+	tBool m_ESActivated;
+
+	// UltraSonic Input
+	cObjectPtr<IMediaTypeDescription> m_pUltraSonicInput;
+	tBufferID m_szIDFrontLeftUltraSonicInput;
+	tBufferID m_szIDFrontCenterLeftUltraSonicInput;
+	tBufferID m_szIDFrontCenterUltraSonicInput;
+	tBufferID m_szIDFrontCenterRightUltraSonicInput;
+	tBufferID m_szIDFrontRightUltraSonicInput;
+	tBufferID m_szIDRearRightUltraSonicInput;
+	tBufferID m_szIDRearCenterUltraSonicInput;
+	tBufferID m_szIDRearLeftUltraSonicInput;
+    tBool m_bIDsUltraSonicSet;
+
+	// ServoAngleInput
+	cObjectPtr<IMediaTypeDescription> m_pSignalServoAngleInput;
+	tBufferID m_szIDSignalValueServoAngleInput;
+	tBool m_bServoAngleInputSet;
+
+	// CarSpeedInput
+	cObjectPtr<IMediaTypeDescription> m_pSignalCarSpeedInput;
+	tBufferID m_szIDSignalValueCarSpeedInput;
+	tBool m_bCarSpeedInputSet;
+
+	// SpeedControllerInput
+	cObjectPtr<IMediaTypeDescription> m_pSignalSpeedControllerInput;
+	tBufferID m_szIDSignalValueSpeedControllerInput;
+	tBufferID m_szIDTimestampSpeedControllerInput;
+	tBool m_bSpeedControllerInputSet;
+
+	// StatusES Input
+	cObjectPtr<IMediaTypeDescription> m_pStatusESInput;
+	tBufferID m_szIDBoolValueStatusESInput;
+	tBool m_bStatusESSet;
+
+	// BreaklightOutput
+	cObjectPtr<IMediaTypeDescription> m_pBreaklightOutput;
+	tBufferID m_szIDBoolValueBreaklightOutput;
+	tBufferID m_szIDTimestampBreaklightOutput;
+	tBool m_bBreaklightOutputSet;
+	
+	// DecisionMakingOutput
+	cObjectPtr<IMediaTypeDescription> m_pDecisionMakingOutput;
+	tBufferID m_szIDBoolValueDecisionMakingOutput;
+	tBufferID m_szIDTimestampDecisionMakingOutput;
+	tBool m_bDecisionMakingOutputSet;
+
+	// SpeedOutOutput
+	cObjectPtr<IMediaTypeDescription> m_pSignalSpeedOutOutput;
+	tBufferID m_szIDSignalValueSpeedOutput;
+	tBufferID m_szIDTimestampSpeedOutput;
+	tBool m_bSpeedOutOutputSet;
+
+	tResult ProcessUltrasonicInput(IMediaSample* pMediaSample);
+    tResult ProcessCarSpeed(IMediaSample* pMediaSample);
+	tResult ProcessServoAngle(IMediaSample* pMediaSample);
+    tResult TransmitSpeed(IMediaSample* pMediaSample);
+	tResult ProcessStatus(IMediaSample* pMediaSample);
+
+    tResult TransmitBreaklightValue(tBool value);
+    tResult TransmitToDecisionMaking(tBool value);
+};
+
+
+
+//*************************************************************************************************
+#endif

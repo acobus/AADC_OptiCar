@@ -1,0 +1,314 @@
+/*
+ * Date 17.03.2016
+ */ 
+/**
+Copyright (c) 
+Audi Autonomous Driving Cup. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+3.  All advertising materials mentioning features or use of this software must display the following acknowledgement: This product includes software developed by the Audi AG and its contributors for Audi Autonomous Driving Cup.
+4.  Neither the name of Audi nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY AUDI AG AND CONTRIBUTORS AS IS AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL AUDI AG OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+**********************************************************************
+* $Author:: spiesra $  $Date:: 2015-05-13 08:29:07#$ $Rev:: 35003   $
+**********************************************************************/
+
+
+#ifndef _STOP_TURNING_FILTER
+#define _STOP_TURNING_FILTER
+
+
+
+#define __guid "adtf.aadc.aadc_StopTurningFilter"
+
+#include "stdafx.h"
+#include "../../include/aadc_structs.h"
+
+
+/*
+This filter can be used to..
+
+*/
+class StopTurningFilter : public adtf::cFilter
+{
+    ADTF_DECLARE_FILTER_VERSION(__guid, "Stop Turning Filter", OBJCAT_DataFilter, "Stop Turning Filter", 1, 0, 0, "BFFT GmbH");
+
+
+public: // construction
+    StopTurningFilter(const tChar *);
+    virtual ~StopTurningFilter();
+
+    /*! overrides cFilter */
+    virtual tResult Init(tInitStage eStage, __exception = NULL);
+
+    /*! overrides cFilter */
+    virtual tResult Start(__exception = NULL);
+
+    /*! overrides cFilter */
+    virtual tResult Stop(__exception = NULL);
+
+    /*! overrides cFilter */
+    virtual tResult Shutdown(tInitStage eStage, __exception = NULL);   
+
+    /*! overrides cFilter */
+    tResult Run(tInt nActivationCode, const tVoid* pvUserData, tInt szUserDataSize, ucom::IException** __exception_ptr=NULL);
+
+	tResult PropertyChanged(const char* strProperty);
+
+protected:
+
+	cVideoPin m_iDepthimagePin;
+
+	/* Input pin start turning */
+	cInputPin m_iStartTurning;
+
+	/* Input pin for driven distance */
+	cInputPin m_iDistance;
+
+	/* Input pin sensor struct */
+	cInputPin m_iUltraSonic;
+
+    /*! the output pin to send the value for speed (lane tracking)*/
+    cOutputPin m_oVelocity;
+	cOutputPin m_oStopLF;
+	cOutputPin m_oStopES;
+	cOutputPin m_oDriveStraight;
+    cOutputPin m_oStartTurning;
+
+    /*! the output pin to send the value for speed controller before turning*/
+    cOutputPin m_oSpeed;
+
+	/*! the output pin to send turn-left-light */
+    cOutputPin m_oTurnLeftOutput;
+
+	/*! the output pin to send turn-right-light */
+    cOutputPin m_oTurnRightOutput;
+    
+	/*! the output pin to send the value for finish turning */
+    cOutputPin m_oFinishStopTurning;
+
+    cOutputPin m_oGCLOutput;
+
+
+
+      /*! handle for timer for sending actuator values*/
+    tHandle m_hTimerOutput;
+
+ 	// implements IPinEventSink
+    tResult OnPinEvent(IPin* pSource,
+                       tInt nEventCode,
+                       tInt nParam1,
+                       tInt nParam2,
+                       IMediaSample* pMediaSample);
+
+private:
+
+    /*! descriptor for actuator values data */        
+    cObjectPtr<IMediaTypeDescription> m_pDescriptionOutput; 
+    /*! the id for the f32value of the media description for the pins */
+    tBufferID m_szIDOutputF32Value; 
+    /*! the id for the arduino time stamp of the media description for the pins */
+    tBufferID m_szIDOutputArduinoTimestamp;         
+    /*! indicates if bufferIDs were set */
+    tBool m_bIDsOutputSet;
+
+
+	// StartParkingInput
+	cObjectPtr<IMediaTypeDescription> m_pStartTurningInput;
+	tBufferID m_szIDBoolValueStartTurningInput;
+	tBufferID m_szIDModeStartTurningInput;
+	tBufferID m_szIDTypeStartTurningInput;
+	tBufferID m_szIDGiveWayStartTurningInput;
+	tBufferID m_szIDDistanceStartTurningInput;
+	tBufferID m_szIDTimestampStartTurningInput;
+	tBufferID m_szIDVelocityStartTurningInput;
+	tBufferID m_szIDStopSignStartTurningInput;
+	tBufferID m_szIDBoolValuePullOutModeInput;
+	tBufferID m_szIDBoolValueRotationDegreeInput;
+	tBufferID m_szIDBoolValueCircleInput;
+	tBool m_bIDsStartTurningSet;
+
+
+	// UltraSonic Input
+	cObjectPtr<IMediaTypeDescription> m_pUltraSonicInput;
+	tBufferID m_szIDFrontLeftUltraSonicInput;
+	tBufferID m_szIDFrontCenterLeftUltraSonicInput;
+	tBufferID m_szIDFrontCenterUltraSonicInput;
+	tBufferID m_szIDFrontCenterRightUltraSonicInput;
+	tBufferID m_szIDFrontRightUltraSonicInput;
+    tBool m_bIDsUltraSonicSet;
+
+	// DistanceInput
+	cObjectPtr<IMediaTypeDescription> m_pDistanceInput;
+	tBufferID m_szIDDistanceInput;
+	tBufferID m_szIDTimestampDistanceInput;
+	tBool m_bIDsDistanceSet;
+
+    // StartTurningOutput
+	cObjectPtr<IMediaTypeDescription> m_pStartTurningOutput;
+	tBufferID m_szIDStartTurningMode;
+	tBufferID m_szIDStartTurningPullOut;
+	tBufferID m_szIDStartTurningRotationDegree;
+	tBufferID m_szIDStartTurningCircle;
+	tBool m_bIDsStartTurningOutputSet;
+
+ 	// VelocityOutput
+	cObjectPtr<IMediaTypeDescription> m_pVelocityOutput;
+	tBufferID m_szIDMinVelocityOutput;
+	tBufferID m_szIDMaxVelocityOutput;
+	tBufferID m_szIDVelocityTimestampOutput;
+	tBool m_bIDsVelocityOutput;
+
+	
+	cObjectPtr<IMediaTypeDescription> m_pDescriptionBool;
+	/*! the id for the bool value output of the media description */
+    tBufferID m_szIDBoolValueOutput;
+    /*! indicates if bufferIDs were set */
+    tBool m_bIDsBoolValueOutput;
+    /*! the id for the arduino timestamp output of the media description */
+    tBufferID m_szIDArduinoTimestampOutput;
+
+
+	/*! helper function to toggle a bool signal via the specified pin
+    @param the destination pin to toggle
+    */
+    tResult TransmitBoolValue(cOutputPin* pin, tBool value);
+    cCriticalSection    m_oTransmitBoolCritSection;
+
+	// flag for activating filter (true while either stopping, waiting or turning)
+	tBool m_filterActive;
+
+	tBool m_showGCL;
+
+	// flags for turning-light
+	tBool m_turnLeftON, m_turnRightON;
+	// flag for stopping mode (true while car slows down)
+	tBool m_stopTurningActive;
+	// flag for free crossroad (no traffic)
+	tBool m_noTraffic;
+    // flag for testing miniboxes 5 and 8
+    tBool m_text_minibox;
+	
+
+	// DriveStraight
+	tBool m_DriveStraightSet;
+
+	tBool m_waiting;
+	tUInt32 m_startWait;
+
+
+	// Lookup-table turning modes
+	tInt32 turningModeLookup[4][3][3];
+
+	// turning mode: siehe Zettel (1-12)
+	tInt32 m_turningMode;
+
+	tInt32 m_giveWay;
+
+	tInt32 m_turningType;
+
+	tBool m_stopSign;
+
+	tBool m_pullOutMode;
+
+	tFloat32 m_rotationDegree;
+	
+	// circle mode: no_traffic=true
+	tBool m_circle;
+	//is in circle
+	tBool m_isInCircle;
+
+
+	// turning maneuvre -> left, straight on, right
+	tInt32 m_turningManeuvre;
+
+    /*! holds the timestamp when the list was started*/
+    tUInt32 m_i32StartTimeStamp;
+    
+    // holds the timestamp when stoppingProcess was finished
+    tUInt32 m_i32TimeStampHoldLine;
+
+    // bitmap format of input pin
+    tBitmapFormat m_sInputFormatDepthimage;
+    
+	tBool m_bFirstFrameDepthimage;
+
+	// velocity at t=0
+	tFloat32 m_velocityZero;
+	// distance to stopping position at t=0
+	tFloat32 m_distanceZero;
+	// distance offset
+	tFloat32 m_distanceOffset;
+	// distance to crossing
+	tFloat32 m_dist2crossing;
+
+	// counter for obstacles
+	tInt32 m_c1, m_c2, m_c4, m_c5, m_c6, m_c7, m_c8, m_c9, m_c5_b, m_c5_f, m_c8_r, m_c8_l;
+	tInt32 m_c1all, m_c2all, m_c4all, m_c5all, m_c6all, m_c7all, m_c8all, m_c9all, m_c8_rall, m_c8_lall, m_c5_ball, m_c5_fall;
+	
+	// counter for frames without obstacle
+	tInt32 m_good_frame_count;
+
+	// counter for frames with obstacle
+	tInt32 m_bad_frame_count;
+
+	// counter for frames with obstacle in left or right minibox of box 8
+	tInt32 m_bad_frame_8_count;
+
+	// waiting time between two frames
+	tFloat32 m_waiting_time;
+
+	// counter for frames without obstacle (ultrasound)
+	tInt32 m_good_us_count;
+
+	// counter for frames with obstacle (ultrasound)
+	tInt32 m_bad_us_count;
+
+	// counter for frames with static obstacle in box 5
+	tInt32 m_bad_frame_5_count;
+
+	void InitialState();
+
+	void countObstacles(Point3f &coordinates, int i, int j);
+	tBool checkObstacles();
+
+	tResult ProcessStoppingSpeed(IMediaSample* pMediaSample);
+
+	tResult ProcessTurningStruct(IMediaSample* pMediaSample);
+
+	tResult ProcessInputDepth(IMediaSample* pSample);
+
+	tResult ProcessUltraSonic(IMediaSample* pMediaSample);
+
+	tResult CreateAndTransmitGCL();
+
+	tResult ChangeSpeed(tFloat32 fSpeed);
+
+	tResult TransmitVelocityLT(tFloat32 fSpeed);
+
+	tResult TransmitTurningStruct(tInt32 turningManeuvre);
+
+	tResult StartTurning();
+
+	std::vector<int> aux1;
+	std::vector<int> aux2;
+	std::vector<int> aux4;
+	std::vector<int> aux5;
+	std::vector<int> aux6;
+	std::vector<int> aux7;
+	std::vector<int> aux8;
+	std::vector<int> aux9;
+	std::vector<int> auxObs;
+	
+	bool Wait();
+
+	tInt32 m_counter;
+};
+
+#endif

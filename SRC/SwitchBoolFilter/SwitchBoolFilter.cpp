@@ -1,0 +1,202 @@
+/**
+Copyright (c) 
+Audi Autonomous Driving Cup. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+3.  All advertising materials mentioning features or use of this software must display the following acknowledgement: “This product includes software developed by the Audi AG and its contributors for Audi Autonomous Driving Cup.”
+4.  Neither the name of Audi nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY AUDI AG AND CONTRIBUTORS “AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL AUDI AG OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+**********************************************************************
+* $Author:: spiesra $  $Date:: 2015-05-13 08:29:07#$ $Rev:: 35003   $
+**********************************************************************/
+
+
+// arduinofilter.cpp : Definiert die exportierten Funktionen für die DLL-Anwendung.
+//
+#include "stdafx.h"
+#include "SwitchBoolFilter.h"
+
+ADTF_FILTER_PLUGIN("Switch Boolvalue", OID_ADTF_SWITCHBOOL_FILTER, SwitchBool)
+
+SwitchBool::SwitchBool(const tChar* __info) : cFilter(__info)
+{
+   
+}
+
+SwitchBool::~SwitchBool()
+{
+}
+
+
+tResult SwitchBool::PropertyChanged(const char* strProperty)
+{
+    ReadProperties(strProperty);
+
+    RETURN_NOERROR;
+}
+
+tResult SwitchBool::ReadProperties(const tChar* strPropertyName)
+{
+
+    RETURN_NOERROR;
+}
+
+
+tResult SwitchBool::CreateInputPins(__exception)
+{       
+    // create description manager
+    cObjectPtr<IMediaDescriptionManager> pDescManager;
+    RETURN_IF_FAILED(_runtime->GetObject(OID_ADTF_MEDIA_DESCRIPTION_MANAGER,IID_ADTF_MEDIA_DESCRIPTION_MANAGER,(tVoid**)&pDescManager,__exception_ptr));
+
+	// Get description for bool values
+	tChar const * strDescBoolSignalValue = pDescManager->GetMediaDescription("tBoolSignalValue");	
+	RETURN_IF_POINTER_NULL(strDescBoolSignalValue);	
+	cObjectPtr<IMediaType> pTypeBoolSignalValue = new cMediaType(0, 0, 0, "tBoolSignalValue", strDescBoolSignalValue, IMediaDescription::MDF_DDL_DEFAULT_VERSION); 
+
+    // set member media description
+    RETURN_IF_FAILED(pTypeBoolSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pDescInputBool));
+
+    // create pins
+    RETURN_IF_FAILED(m_InputBool.Create("input", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));
+    RETURN_IF_FAILED(RegisterPin(&m_InputBool));
+
+    RETURN_NOERROR;
+}
+
+tResult SwitchBool::CreateOutputPins(__exception)
+{
+    // create description manager
+    cObjectPtr<IMediaDescriptionManager> pDescManager;
+    RETURN_IF_FAILED(_runtime->GetObject(OID_ADTF_MEDIA_DESCRIPTION_MANAGER,IID_ADTF_MEDIA_DESCRIPTION_MANAGER,(tVoid**)&pDescManager,__exception_ptr));
+
+	// Get description for bool values
+	tChar const * strDescBoolSignalValue = pDescManager->GetMediaDescription("tBoolSignalValue");	
+	RETURN_IF_POINTER_NULL(strDescBoolSignalValue);	
+	cObjectPtr<IMediaType> pTypeBoolSignalValue = new cMediaType(0, 0, 0, "tBoolSignalValue", strDescBoolSignalValue, IMediaDescription::MDF_DDL_DEFAULT_VERSION); 
+
+    // set member media description
+    RETURN_IF_FAILED(pTypeBoolSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pDescOutputBool));
+
+    // create pins
+    RETURN_IF_FAILED(m_OutputBool.Create("output", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));
+    RETURN_IF_FAILED(RegisterPin(&m_OutputBool));
+
+    RETURN_NOERROR;
+}
+
+tResult SwitchBool::Init(tInitStage eStage, __exception)
+{
+    RETURN_IF_FAILED(cFilter::Init(eStage, __exception_ptr))
+
+        if (eStage == StageFirst)
+        {
+            RETURN_IF_FAILED(CreateInputPins(__exception_ptr));
+            RETURN_IF_FAILED(CreateOutputPins(__exception_ptr));
+        }
+        else if (eStage == StageNormal)
+        {
+            ReadProperties(NULL);
+        }
+        else if(eStage == StageGraphReady)
+        {    
+            // set the flags which indicate if the media descriptions strings were set
+            m_bInputBoolGetID = tFalse;
+            m_bOutputBoolGetID = tFalse;
+        }
+
+        RETURN_NOERROR;
+}
+
+tResult SwitchBool::Start(__exception)
+{
+   
+    return cFilter::Start(__exception_ptr);
+}
+
+tResult SwitchBool::Stop(__exception)
+{
+    return cFilter::Stop(__exception_ptr);
+}
+
+tResult SwitchBool::Shutdown(tInitStage eStage, __exception)
+{
+    return cFilter::Shutdown(eStage,__exception_ptr);
+}
+
+
+tResult SwitchBool::OnPinEvent(    IPin* pSource, tInt nEventCode, tInt nParam1, tInt nParam2, IMediaSample* pMediaSample)
+{
+	
+    if (nEventCode == IPinEventSink::PE_MediaSampleReceived && pMediaSample != NULL) 
+    {
+        RETURN_IF_POINTER_NULL( pMediaSample);
+
+        if (pSource == &m_InputBool) {
+             
+			tBool bValue = tFalse;
+			tUInt32 ui32TimeStamp = 0;
+
+            {    
+                //write values with zero
+                
+                
+
+                // focus for sample write lock
+                __adtf_sample_read_lock_mediadescription(m_pDescInputBool,pMediaSample,pCoder);	
+
+                if(!m_bInputBoolGetID)
+                {
+                    pCoder->GetID("bValue", m_buIDInputBool);
+                    pCoder->GetID("ui32ArduinoTimestamp", m_buIDInputBoolTimestamp);
+                    m_bInputBoolGetID = tTrue;
+                }
+
+                // read data from the media sample with the coder of the descriptor    	
+                //get values from media sample        
+                pCoder->Get(m_buIDInputBool, (tVoid*)&bValue);
+                pCoder->Get(m_buIDInputBoolTimestamp, (tVoid*)&ui32TimeStamp);    
+            }
+
+            //create new media sample
+            cObjectPtr<IMediaSample> pNewMediaSample;
+            AllocMediaSample((tVoid**)&pNewMediaSample);
+
+            //allocate memory with the size given by the descriptor
+            cObjectPtr<IMediaSerializer> pSerializer;
+            m_pDescOutputBool->GetMediaSampleSerializer(&pSerializer);
+            tInt nSize = pSerializer->GetDeserializedSize();
+            pNewMediaSample->AllocBuffer(nSize);
+
+			bValue = !bValue;
+
+			{    
+                // focus for sample write lock	
+                //read data from the media sample with the coder of the descriptor    	
+                __adtf_sample_write_lock_mediadescription(m_pDescOutputBool,pNewMediaSample,pCoderOut);	
+
+                if(!m_bOutputBoolGetID)
+                {
+                    pCoderOut->GetID("bValue", m_buIDOutputBool);
+                    pCoderOut->GetID("ui32ArduinoTimestamp", m_buIDOutputBoolTimestamp);
+                    m_bInputBoolGetID = tTrue;
+                }
+                //get values from media sample        
+                pCoderOut->Set(m_buIDOutputBool, (tVoid*)&bValue);
+				pCoderOut->Set(m_buIDOutputBoolTimestamp, (tVoid*)&ui32TimeStamp);
+            }
+
+            //transmit media sample over output pin
+            RETURN_IF_FAILED(pNewMediaSample->SetTime(_clock->GetStreamTime()));
+            RETURN_IF_FAILED(m_OutputBool.Transmit(pNewMediaSample));
+        }
+
+    }
+    RETURN_NOERROR;
+}
+

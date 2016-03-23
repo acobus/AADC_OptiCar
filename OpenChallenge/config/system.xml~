@@ -1,0 +1,1987 @@
+<?xml version="1.0" encoding="iso-8859-1" standalone="no"?>
+<adtf:project xmlns:adtf="adtf">
+ <general_settings>
+  <property name="active_configuration" type="String" value="OpenChallengeTest" />
+  <property name="media_description_files" type="String" value="./../description/*.description;./../addons/*/description/*.description;./../src/examples/src/description/*.description;../../../../description/*.description/*.*;../../../description/aadc.description" />
+  <property name="media_description_enable_provide_signals" type="Bool" value="true" />
+  <property name="enable_messagebus" type="Bool" value="true" />
+ </general_settings>
+ <configurations>
+  <configuration description="" name="ImageProcessing">
+   <graph>
+    <filter alias="ImageProcessing" idref="adtf.aadc.ImageProcessing" priority="1">
+     <settings>
+      <property name="Common::Show Debug" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display2" idref="adtf.visual.video_display" priority="1">
+     <settings />
+    </filter>
+    <filter alias="AADC_Xtion_Camera2" idref="adtf.aadc.aadc_xtionCamera" priority="1">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Video_Display2.input" interface="" source="AADC_Xtion_Camera2.Video_RGB" />
+    <connection connection_priority="50" dest="ImageProcessing.Video_Input" interface="" source="AADC_Xtion_Camera2.Video_RGB" />
+    <connection connection_priority="50" dest="Video_Display2.gcl_input" interface="" source="ImageProcessing.GLC_Output" />
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="2">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="AADC_Xtion_Camera2.Depth_Image" />
+   </graph>
+  </configuration>
+  <configuration description="" name="DecisionMaking">
+   <graph>
+    <filter alias="AADC_Calibration_XML" idref="adtf.aadc.aadc_calibrationXML" priority="2">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Calibration_XML2" idref="adtf.aadc.aadc_calibrationXML" priority="3">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../configuration_files/SteeringActuatorLaneTracking.xml" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="4">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="5">
+     <settings />
+    </filter>
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="6">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <subgraph alias="Base_Config" idref="Base_Config" priority="3" />
+    <connection connection_priority="50" dest="Base_Config.Driver_Struct" interface="" source="State_Controller_OptiCar.Driver_Struct" />
+    <connection connection_priority="50" dest="State_Controller_OptiCar.Jury_Struct" interface="" source="Base_Config.Jury_Struct" />
+    <connection connection_priority="50" dest="State_Controller_OptiCar.Maneuver_List" interface="" source="Base_Config.Jury_ManeuverList" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <filter alias="Hold_Filter" idref="adtf.hold_filter" priority="8" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="Hold_Filter.ZeroVelocity" />
+    <connection connection_priority="50" dest="EmergencySTOP.US_FrontLeft" interface="" source="Base_Config.Ultrasonic_Front_Left" />
+    <connection connection_priority="50" dest="EmergencySTOP.US_FrontCenterLeft" interface="" source="Base_Config.Ultrasonic_Front_Center_Left" />
+    <connection connection_priority="50" dest="EmergencySTOP.US_FrontCenter" interface="" source="Base_Config.Ultrasonic_Front_Center" />
+    <connection connection_priority="50" dest="EmergencySTOP.US_FrontCenterRight" interface="" source="Base_Config.Ultrasonic_Front_Center_Right" />
+    <connection connection_priority="50" dest="EmergencySTOP.US_FrontRight" interface="" source="Base_Config.Ultrasonic_Front_Right" />
+    <connection connection_priority="50" dest="EmergencySTOP.US_RearLeft" interface="" source="Base_Config.Ultrasonic_Rear_Left" />
+    <connection connection_priority="50" dest="EmergencySTOP.US_RearCenter" interface="" source="Base_Config.Ultrasonic_Rear_Center" />
+    <connection connection_priority="50" dest="EmergencySTOP.US_RearRight" interface="" source="Base_Config.Ultrasonic_Rear_Right" />
+    <filter alias="AADC_Marker_Detection_Filter" idref="adtf.aadc.aadc_markerDetection" priority="8">
+     <settings>
+      <property name="Calibration File for used Camera" type="String" value="../../../configuration_files/xtionIntrinsicCalib.yml" />
+      <property name="Size of Markers" type="Float" value="0,105.0" />
+      <property name="Dictionary File For Markers" type="String" value="../../../configuration_files/roadsign.yml" />
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Roadsign_Preprocessing_Filter" idref="adtf.road_sign_preprocessing" priority="9" />
+    <connection connection_priority="50" dest="Roadsign_Preprocessing_Filter" interface="" source="AADC_Marker_Detection_Filter.RoadSign" />
+    <connection connection_priority="50" dest="Decision_Making.RoadSign" interface="" source="Roadsign_Preprocessing_Filter.RoadSignsFiltered" />
+    <connection connection_priority="50" dest="Hold_Filter" interface="" source="Decision_Making.State_Hold" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="Cross_Parking_Filter.Speed" />
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="10">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="EmergencySTOP.ServoAngle" interface="" source="AADC_Calibration_XML2.output_value" />
+    <connection connection_priority="50" dest="EmergencySTOP.SpeedController" interface="" source="AADC_Calibration_XML.output_value" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="AADC_Calibration_XML2.output_value" />
+    <filter alias="AADC_Wheel_Speed_Controller" idref="adtf.aadc.aadc_wheelSpeedController" priority="11">
+     <settings />
+    </filter>
+    <filter alias="AADC_Calibration_XML3" idref="adtf.aadc.aadc_calibrationXML" priority="12">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuatorInverse_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Calibration_XML4" idref="adtf.aadc.aadc_calibrationXML" priority="13">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="AADC_Calibration_XML3.input_value" interface="" source="EmergencySTOP.SpeedOut" />
+    <connection connection_priority="50" dest="AADC_Wheel_Speed_Controller.set_WheelSpeed" interface="" source="AADC_Calibration_XML3.output_value" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML4.input_value" interface="" source="AADC_Wheel_Speed_Controller.actuator_output" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML4.output_value" />
+    <filter alias="Cross_Parking_Filter" idref="adtf.aadc.aadc_CrossParkingFilter" priority="14">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Cross_Parking_Filter.Steering" />
+    <connection connection_priority="50" dest="Base_Config.hazzardLightsEnabled" interface="" source="Cross_Parking_Filter.Hazzard_Light" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Cross_Parking_Filter.turn-right_Light" />
+    <connection connection_priority="50" dest="Base_Config.reverseLightsEnabled" interface="" source="Cross_Parking_Filter.reverse_Light" />
+    <filter alias="LaneTracking" idref="adtf.lane_tracking" priority="15">
+     <settings>
+      <property name="Common::Drive Time in milliseconds" type="Int" value="0" />
+      <property name="Common::Enable Lightbeam Trigger" type="Bool" value="true" />
+      <property name="Common::Show Debug" type="Bool" value="true" />
+      <property name="LaneDetection::Far area::Far Line" type="Int" value="225" />
+      <property name="LaneDetection::Far area::Lane width max far" type="Int" value="250" />
+      <property name="LaneDetection::Far area::Lane width min far" type="Int" value="150" />
+      <property name="LaneDetection::Near area::Lane width max near" type="Int" value="350" />
+      <property name="LaneDetection::Near area::Lane width min near" type="Int" value="250" />
+      <property name="LaneDetection::Near area::Near Line" type="Int" value="325" />
+      <property name="LaneDetection::ThresholdValue" type="Int" value="50" />
+      <property name="LongitudinalControl::Far Near difference" type="Int" value="300" />
+      <property name="LongitudinalControl::Min Acceleration" type="Float" value="1,5.0" />
+      <property name="PID::Controller Differential Gain" type="Float" value="0,04.0" />
+      <property name="PID::Controller Integral Gain" type="Float" value="0,009.0" />
+      <property name="PID::Controller Proportional Gain" type="Float" value="0,1.0" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="Decision_Making.State_Lane_Following" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML2.input_value" interface="" source="LaneTracking.Steering_Angle" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="LaneTracking.Acceleration" />
+    <connection connection_priority="50" dest="Base_Config.headLightEnabled" interface="" source="LaneTracking.HeadLights" />
+    <connection connection_priority="50" dest="Video_Display.gcl_input" interface="" source="LaneTracking.GLC_Output" />
+    <filter alias="Decision_Making" idref="adtf.decision_making" priority="16" />
+    <filter alias="State_Controller_OptiCar" idref="adtf.state_controller" priority="17">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Decision_Making" interface="" source="State_Controller_OptiCar.Maneuvre_Code" />
+    <connection connection_priority="50" dest="Decision_Making.State_Decision_Making" interface="" source="State_Controller_OptiCar.Start" />
+    <connection connection_priority="50" dest="State_Controller_OptiCar.Increment_Maneuver_ID" interface="" source="Decision_Making.Increment_Maneuvre" />
+    <filter alias="EmergencySTOP" idref="adtf.example.Emergency_STOP" priority="18">
+     <settings />
+    </filter>
+    <connection active="false" connection_priority="50" dest="Decision_Making.Emergency_Break" interface="" source="EmergencySTOP.Decision_Making" />
+    <connection connection_priority="50" dest="Base_Config.brakeLightEnabled" interface="" source="EmergencySTOP.Breaklight" />
+    <connection connection_priority="50" dest="EmergencySTOP.ServoAngle" interface="" source="Cross_Parking_Filter.Steering" />
+    <filter alias="Undistort" idref="adtf.example.undistort" priority="19" />
+    <connection connection_priority="50" dest="Undistort.Image_Dist" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="AADC_Marker_Detection_Filter.Video_RGB_input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="LaneTracking.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="Undistort.Image_Undist" />
+    <filter alias="Stop_Filter" idref="adtf.stop_filter" priority="20" />
+    <filter alias="Tick_Filter" idref="adtf.aadc.aadc_tickFilter" priority="21">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Stop_Filter.StopStruct" interface="" source="Decision_Making.State_CrossPark" />
+    <connection connection_priority="50" dest="Cross_Parking_Filter.StartCrossParking" interface="" source="Stop_Filter.finish_Stopping" />
+    <connection connection_priority="50" dest="Decision_Making.CarSpeed" interface="" source="Tick_Filter.car_speed" />
+    <connection connection_priority="50" dest="EmergencySTOP.CarSpeed" interface="" source="Tick_Filter.car_speed" />
+    <connection connection_priority="50" dest="AADC_Wheel_Speed_Controller.measured_wheelSpeed" interface="" source="Tick_Filter.car_speed" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+    <connection connection_priority="50" dest="Stop_Filter.Distance" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="LaneTracking.CurrentVelocity" interface="" source="Stop_Filter.Velocity" />
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="Stop_Filter.Stop_LF" />
+   </graph>
+  </configuration>
+  <configuration description="" name="Parking">
+   <graph>
+    <filter alias="AADC_Calibration_XML" idref="adtf.aadc.aadc_calibrationXML" priority="1">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="2">
+     <settings />
+    </filter>
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="3">
+     <settings />
+    </filter>
+    <subgraph alias="Base_Config" idref="Base_Config" priority="4" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <connection active="false" connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="Parallel_Parking_Filter.Speed" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML.output_value" />
+    <connection active="false" connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Parallel_Parking_Filter.Steering" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="Cross_Parking_Filter.Speed" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Cross_Parking_Filter.Steering" />
+    <filter alias="AADC_Converter_Wheels" idref="adtf.aadc.aadc_converterWheels" priority="5">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="AADC_Converter_Wheels.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <connection connection_priority="50" dest="AADC_Converter_Wheels.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+    <filter alias="AADC_Bool_Value_Generator" idref="adtf.aadc.aadc_boolValueGenerator" priority="6">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Cross_Parking_Filter.StartCrossParking" interface="" source="AADC_Bool_Value_Generator.BoolValue" />
+    <filter alias="AADC_Bool_Value_Generator2" idref="adtf.aadc.aadc_boolValueGenerator" priority="7">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Base_Config.hazzardLightsEnabled" interface="" source="AADC_Bool_Value_Generator2.BoolValue" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalLeftEnabled" interface="" source="AADC_Bool_Value_Generator2.BoolValue" />
+    <connection connection_priority="50" dest="Base_Config.reverseLightsEnabled" interface="" source="AADC_Bool_Value_Generator2.BoolValue" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="AADC_Bool_Value_Generator2.BoolValue" />
+    <connection connection_priority="50" dest="Base_Config.headLightEnabled" interface="" source="AADC_Bool_Value_Generator2.BoolValue" />
+    <filter alias="Cross_Parking_Filter" idref="adtf.aadc.aadc_CrossParkingFilter" priority="8">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+      <property name="Time Stretch Factor" type="Float" value="1,2.0" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Base_Config.hazzardLightsEnabled" interface="" source="Cross_Parking_Filter.Hazzard_Light" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Cross_Parking_Filter.turn-right_Light" />
+    <connection connection_priority="50" dest="Base_Config.reverseLightsEnabled" interface="" source="Cross_Parking_Filter.reverse_Light" />
+    <connection active="false" connection_priority="50" dest="Base_Config.hazzardLightsEnabled" interface="" source="Parallel_Parking_Filter.Hazzard_Light" />
+    <connection active="false" connection_priority="50" dest="Base_Config.reverseLightsEnabled" interface="" source="Parallel_Parking_Filter.reverse_Light" />
+    <filter alias="Parallel_Parking_Filter" idref="adtf.aadc.aadc_ParallelParkingFilter" priority="9">
+     <settings>
+      <property name="active" type="Bool" value="false" />
+      <property name="Time Stretch Factor PP" type="Float" value="1,42.0" />
+      <property name="Actuator Update Rate [Hz]" type="Int" value="100" />
+     </settings>
+    </filter>
+    <connection active="false" connection_priority="50" dest="Parallel_Parking_Filter.StartParallelParking" interface="" source="Cross_Parking_Filter.finish_Parking" />
+    <connection active="false" connection_priority="50" dest="Cross_Parking_Filter.StartCrossParking" interface="" source="Parallel_Parking_Filter.finish_Parking" />
+    <connection active="false" connection_priority="50" dest="Parallel_Parking_Filter.StartParallelParking" interface="" source="AADC_Bool_Value_Generator.BoolValue" />
+    <connection active="false" connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Parallel_Parking_Filter.turn-right_Light" />
+   </graph>
+  </configuration>
+  <configuration description="" name="Stopping">
+   <graph>
+    <filter alias="AADC_Calibration_XML" idref="adtf.aadc.aadc_calibrationXML" priority="1">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="2">
+     <settings />
+    </filter>
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="3">
+     <settings />
+    </filter>
+    <subgraph alias="Base_Config" idref="Base_Config" priority="4" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML.output_value" />
+    <filter alias="Test_Stop_Filter" idref="adtf.aadc.aadc_testStopFilter" priority="5">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+      <property name="StopSign" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Start_Filter" idref="adtf.start_filter" priority="6">
+     <settings>
+      <property name="active" type="Bool" value="false" />
+     </settings>
+    </filter>
+    <filter alias="Parallel_Parking_Filter" idref="adtf.aadc.aadc_ParallelParkingFilter" priority="7">
+     <settings>
+      <property name="active" type="Bool" value="false" />
+     </settings>
+    </filter>
+    <connection active="false" connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Parallel_Parking_Filter.Steering" />
+    <filter alias="AADC_Bool_Value_Generator" idref="adtf.aadc.aadc_boolValueGenerator" priority="8">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection active="false" connection_priority="50" dest="Start_Filter.Distance" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <filter alias="AADC_Signal_Value_Generator" idref="adtf.aadc.aadc_signalValueGenerator" priority="9">
+     <settings>
+      <property name="File for Default Values" type="String" value="../../../stopping.txt" />
+      <property name="Default Value 2" type="Float" value="120.0" />
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Signal_View2" idref="adtf.ui.signal_view" priority="10">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="AADC_Signal_Value_Generator.Value_2" />
+    <filter alias="Tick_Filter" idref="adtf.aadc.aadc_tickFilter" priority="11">
+     <settings />
+    </filter>
+    <connection active="false" connection_priority="50" dest="Start_Filter.RealVelocity" interface="" source="Tick_Filter.car_speed" />
+    <filter alias="Turning_Filter" idref="adtf.aadc.aadc_TurningFilter" priority="11">
+     <settings />
+    </filter>
+    <connection active="false" connection_priority="50" dest="Start_Filter.StartStruct" interface="" source="Test_Stop_Filter.StopStructParking" />
+    <connection connection_priority="50" dest="Turning_Filter.us_struct" interface="" source="Base_Config.Ultrasonic_Struct" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="Turning_Filter.Speed" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Turning_Filter.Steering" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Turning_Filter.turn-right_Light" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalLeftEnabled" interface="" source="Turning_Filter.turn-left_Light" />
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="12">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Turning_Filter.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <filter alias="Stop_Filter_for_Turning" idref="adtf.stop_filter_turning" priority="13" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Turning.Distance" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Turning.State_Turning" interface="" source="Test_Stop_Filter.StopStructTurning" />
+    <connection active="false" connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="Stop_Filter_for_Turning.Velocity" />
+    <connection connection_priority="50" dest="Turning_Filter.StartTurning" interface="" source="Stop_Filter_for_Turning.Start_Turning" />
+    <filter alias="LaneTracking2" idref="adtf.lane_tracking" priority="11">
+     <settings>
+      <property name="Common::Drive Time in milliseconds" type="Int" value="0" />
+      <property name="Common::Enable Lightbeam Trigger" type="Bool" value="true" />
+      <property name="Common::Show Debug" type="Bool" value="true" />
+      <property name="LaneDetection::Far area::Far Line" type="Int" value="330" />
+      <property name="LaneDetection::Far area::Lane width max far" type="Int" value="350" />
+      <property name="LaneDetection::Far area::Lane width min far" type="Int" value="210" />
+      <property name="LaneDetection::Near area::Lane width max near" type="Int" value="500" />
+      <property name="LaneDetection::Near area::Lane width min near" type="Int" value="330" />
+      <property name="LaneDetection::Near area::Near Line" type="Int" value="400" />
+      <property name="LaneDetection::ThresholdValue" type="Int" value="50" />
+      <property name="PID::Controller Proportional Gain" type="Float" value="0,1.0" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="LaneTracking2.Video_Input" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="LaneTracking2.start" interface="" source="AADC_Bool_Value_Generator.BoolValue" />
+    <connection connection_priority="50" dest="LaneTracking2.CurrentVelocity" interface="" source="Stop_Filter_for_Turning.Velocity" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="LaneTracking2.Acceleration" />
+    <connection connection_priority="50" dest="LaneTracking2.start" interface="" source="Stop_Filter_for_Turning.Stop_LF" />
+   </graph>
+  </configuration>
+  <configuration description="" name="CameraCalibration">
+   <graph>
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="1">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Camera_Calibration" idref="adtf.aadc.aadc_cameraCalibration" priority="2">
+     <settings>
+      <property name="Height [number of squares]" type="Int" value="14" />
+      <property name="Square Size" type="Float" value="0,0235.0" />
+      <property name="Width [number of squares]" type="Int" value="10" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="AADC_Camera_Calibration.Video_RGB_input" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+   </graph>
+  </configuration>
+  <configuration description="" name="VisualOdometry">
+   <graph>
+    <filter alias="VisualOdometry" idref="adtf.aadc.VisualOdometry" priority="1" />
+    <filter alias="AADC_Bool_Value_Generator" idref="adtf.aadc.aadc_boolValueGenerator" priority="3">
+     <settings />
+    </filter>
+    <filter alias="AADC_Signal_Value_Generator" idref="adtf.aadc.aadc_signalValueGenerator" priority="4">
+     <settings>
+      <property name="Default Value 1" type="Float" value="65.0" />
+      <property name="Default Value 2" type="Float" value="120.0" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="5">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <subgraph alias="Base_Config" idref="Base_Config" priority="3" />
+    <connection connection_priority="50" dest="VisualOdometry.start" interface="" source="AADC_Bool_Value_Generator.BoolValue" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Signal_Value_Generator.Value_1" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="AADC_Signal_Value_Generator.Value_2" />
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="6">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="7">
+     <settings />
+    </filter>
+    <filter alias="Undistort" idref="adtf.example.undistort" priority="8">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Undistort.Image_Dist" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="VisualOdometry.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="9">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="VisualOdometry.Depth_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+   </graph>
+  </configuration>
+  <configuration description="" name="Umdrehungszaehler">
+   <graph>
+    <filter alias="AADC_Calibration_XML" idref="adtf.aadc.aadc_calibrationXML" priority="1">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="2">
+     <settings />
+    </filter>
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="3">
+     <settings />
+    </filter>
+    <filter alias="Test_Stop_Filter" idref="adtf.aadc.aadc_testStopFilter" priority="4">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Parallel_Parking_Filter" idref="adtf.aadc.aadc_ParallelParkingFilter" priority="5">
+     <settings>
+      <property name="active" type="Bool" value="false" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Bool_Value_Generator" idref="adtf.aadc.aadc_boolValueGenerator" priority="6">
+     <settings>
+      <property name="active" type="Bool" value="false" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Signal_Value_Generator" idref="adtf.aadc.aadc_signalValueGenerator" priority="8">
+     <settings>
+      <property name="Default Value 2" type="Float" value="90.0" />
+      <property name="File for Default Values" type="String" value="../../../umdrehungen_loeschen.txt" />
+     </settings>
+    </filter>
+    <subgraph alias="Base_Config" idref="Base_Config" priority="7" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML.output_value" />
+    <connection active="false" connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="Parallel_Parking_Filter.Speed" />
+    <connection active="false" connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Parallel_Parking_Filter.Steering" />
+    <connection active="false" connection_priority="50" dest="Parallel_Parking_Filter.StartParallelParking" interface="" source="AADC_Bool_Value_Generator.BoolValue" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="AADC_Signal_Value_Generator.Value_1" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="AADC_Signal_Value_Generator.Value_2" />
+    <filter alias="Tick_Filter" idref="adtf.aadc.aadc_tickFilter" priority="9">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Tick_Filter.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+   </graph>
+  </configuration>
+  <configuration description="" name="SpeedMessung">
+   <graph>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="1">
+     <settings />
+    </filter>
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="2">
+     <settings />
+    </filter>
+    <filter alias="Test_Stop_Filter" idref="adtf.aadc.aadc_testStopFilter" priority="3">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Signal_Value_Generator" idref="adtf.aadc.aadc_signalValueGenerator" priority="4">
+     <settings>
+      <property name="Default Value 2" type="Float" value="90.0" />
+      <property name="File for Default Values" type="String" value="../../../umdrehungen_loeschen.txt" />
+      <property name="Default Value 1" type="Float" value="90.0" />
+     </settings>
+    </filter>
+    <filter alias="Tick_Filter" idref="adtf.aadc.aadc_tickFilter" priority="5">
+     <settings />
+    </filter>
+    <subgraph alias="Base_Config" idref="Base_Config" priority="6" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="AADC_Signal_Value_Generator.Value_2" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Signal_Value_Generator.Value_1" />
+   </graph>
+  </configuration>
+  <configuration description="" name="DecisionMaking2">
+   <graph>
+    <filter alias="AADC_Calibration_XML" idref="adtf.aadc.aadc_calibrationXML" priority="1">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Calibration_XML2" idref="adtf.aadc.aadc_calibrationXML" priority="2">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../configuration_files/SteeringActuatorLaneTracking.xml" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="3">
+     <settings>
+      <property name="active" type="Bool" value="false" />
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="4">
+     <settings />
+    </filter>
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="5">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Hold_Filter" idref="adtf.hold_filter" priority="6" />
+    <filter alias="Roadsign_Preprocessing_Filter" idref="adtf.road_sign_preprocessing" priority="7" />
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="8">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Calibration_XML3" idref="adtf.aadc.aadc_calibrationXML" priority="9">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuatorInverse_eigene_neu.xml" />
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Calibration_XML4" idref="adtf.aadc.aadc_calibrationXML" priority="10">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="LaneTracking" idref="adtf.lane_tracking" priority="11">
+     <settings>
+      <property name="Common::Drive Time in milliseconds" type="Int" value="0" />
+      <property name="Common::Enable Lightbeam Trigger" type="Bool" value="true" />
+      <property name="Common::Show Debug" type="Bool" value="true" />
+      <property name="LaneDetection::Far area::Lane width max far" type="Int" value="340" />
+      <property name="LaneDetection::Far area::Lane width min far" type="Int" value="200" />
+      <property name="LaneDetection::Near area::Lane width max near" type="Int" value="490" />
+      <property name="LaneDetection::Near area::Lane width min near" type="Int" value="340" />
+      <property name="LaneDetection::Near area::Near Line" type="Int" value="370" />
+      <property name="LaneDetection::Far area::Far Line" type="Int" value="300" />
+      <property name="LT::ImagecutHeightDownHough" type="Int" value="410" />
+     </settings>
+    </filter>
+    <filter alias="Decision_Making" idref="adtf.decision_making" priority="12">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="State_Controller_OptiCar" idref="adtf.state_controller" priority="13">
+     <settings />
+    </filter>
+    <filter alias="Undistort" idref="adtf.example.undistort" priority="14" />
+    <filter alias="Tick_Filter" idref="adtf.aadc.aadc_tickFilter" priority="15">
+     <settings />
+    </filter>
+    <subgraph alias="Base_Config" idref="Base_Config" priority="16" />
+    <connection connection_priority="50" dest="Base_Config.Driver_Struct" interface="" source="State_Controller_OptiCar.Driver_Struct" />
+    <connection connection_priority="50" dest="State_Controller_OptiCar.Jury_Struct" interface="" source="Base_Config.Jury_Struct" />
+    <connection connection_priority="50" dest="State_Controller_OptiCar.Maneuver_List" interface="" source="Base_Config.Jury_ManeuverList" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="Hold_Filter.ZeroVelocity" />
+    <connection connection_priority="50" dest="Decision_Making.RoadSign" interface="" source="Roadsign_Preprocessing_Filter.RoadSignsFiltered" />
+    <connection connection_priority="50" dest="Hold_Filter" interface="" source="Decision_Making.State_Hold" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="AADC_Calibration_XML2.output_value" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML4.output_value" />
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="Decision_Making.State_Lane_Following" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML2.input_value" interface="" source="LaneTracking.Steering_Angle" />
+    <connection connection_priority="50" dest="Base_Config.headLightEnabled" interface="" source="LaneTracking.HeadLights" />
+    <connection connection_priority="50" dest="Decision_Making" interface="" source="State_Controller_OptiCar.Maneuvre_Code" />
+    <connection connection_priority="50" dest="Decision_Making.State_Decision_Making" interface="" source="State_Controller_OptiCar.Start" />
+    <connection connection_priority="50" dest="State_Controller_OptiCar.Increment_Maneuver_ID" interface="" source="Decision_Making.Increment_Maneuvre" />
+    <connection connection_priority="50" dest="Undistort.Image_Dist" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="LaneTracking.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <connection active="false" connection_priority="50" dest="Video_Display.input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="Decision_Making.CarSpeed" interface="" source="Tick_Filter.car_speed" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+    <filter alias="AADC_Calibration_XML5" idref="adtf.aadc.aadc_calibrationXML" priority="17">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML5.output_value" />
+    <filter alias="Wheel_Speed_Controller" idref="adtf.aadc.wheelSpeedController" priority="18">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Wheel_Speed_Controller.set_WheelSpeed" interface="" source="AADC_Calibration_XML3.output_value" />
+    <connection connection_priority="50" dest="Wheel_Speed_Controller.measured_wheelSpeed" interface="" source="Tick_Filter.car_speed" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML4.input_value" interface="" source="Wheel_Speed_Controller.actuator_output" />
+    <subgraph alias="Cross_Parking_Config" idref="Cross_Parking_Config" priority="19" />
+    <connection connection_priority="50" dest="Cross_Parking_Config.distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="Cross_Parking_Config.start_cross_parking" interface="" source="Decision_Making.State_CrossPark" />
+    <connection connection_priority="50" dest="LaneTracking.CurrentVelocity" interface="" source="Cross_Parking_Config.velocity_LF" />
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="Cross_Parking_Config.stop_LF" />
+    <connection connection_priority="50" dest="Wheel_Speed_Controller.activate_filter" interface="" source="Cross_Parking_Config.stop_ES_Controler" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Cross_Parking_Config.steering" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Cross_Parking_Config.turn_right_light" />
+    <connection connection_priority="50" dest="Base_Config.reverseLightsEnabled" interface="" source="Cross_Parking_Config.reverse_light" />
+    <connection connection_priority="50" dest="Base_Config.hazzardLightsEnabled" interface="" source="Cross_Parking_Config.hazzard_light" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML5.input_value" interface="" source="Cross_Parking_Config.velocity_parking" />
+    <subgraph alias="Parallel_Parking_Config" idref="Parallel_Parking_Config" priority="20" />
+    <connection connection_priority="50" dest="Parallel_Parking_Config.start_parallel_parking" interface="" source="Decision_Making.State_ParallelPark" />
+    <connection connection_priority="50" dest="Parallel_Parking_Config.distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="Parallel_Parking_Config.stop_LF" />
+    <connection connection_priority="50" dest="Base_Config.reverseLightsEnabled" interface="" source="Parallel_Parking_Config.reverse_light" />
+    <connection connection_priority="50" dest="LaneTracking.CurrentVelocity" interface="" source="Parallel_Parking_Config.velocity_LF" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Parallel_Parking_Config.turn_right_light" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Parallel_Parking_Config.steering" />
+    <connection connection_priority="50" dest="Base_Config.hazzardLightsEnabled" interface="" source="Parallel_Parking_Config.hazzard_light" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML5.input_value" interface="" source="Parallel_Parking_Config.velocity_parking" />
+    <connection connection_priority="50" dest="LaneTracking.CurrentVelocity" interface="" source="Decision_Making.VelocityLF" />
+    <connection connection_priority="50" dest="Decision_Making.SteeringAngle" interface="" source="AADC_Calibration_XML2.output_value" />
+    <connection connection_priority="50" dest="Decision_Making.SteeringAngle" interface="" source="Parallel_Parking_Config.steering" />
+    <connection connection_priority="50" dest="Decision_Making.SteeringAngle" interface="" source="Cross_Parking_Config.steering" />
+    <filter alias="EmergencySTOP2" idref="adtf.example.Emergency_STOP" priority="21">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="EmergencySTOP2.ServoAngle" interface="" source="AADC_Calibration_XML2.output_value" />
+    <connection connection_priority="50" dest="EmergencySTOP2.CarSpeed" interface="" source="Tick_Filter.car_speed" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML3.input_value" interface="" source="EmergencySTOP2.SpeedOut" />
+    <connection connection_priority="50" dest="Base_Config.brakeLightEnabled" interface="" source="EmergencySTOP2.Breaklight" />
+    <connection connection_priority="50" dest="EmergencySTOP2.us_struct" interface="" source="Base_Config.Ultrasonic_Struct" />
+    <connection connection_priority="50" dest="EmergencySTOP2.Status" interface="" source="Cross_Parking_Config.stop_ES_Controler" />
+    <connection connection_priority="50" dest="Marker_Detection_Filter.Video_RGB_input" interface="" source="Undistort.Image_Undist" />
+    <filter alias="Marker_Detection_Filter" idref="adtf.markerDetection" priority="22">
+     <settings>
+      <property name="Calibration File for used Camera" type="String" value="../../../src/aadcUser/calibration/xtion_intrinsic_calib.yml" />
+      <property name="Dictionary File For Markers" type="String" value="../../../configuration_files/roadsign.yml" />
+      <property name="active" type="Bool" value="true" />
+      <property name="Video Output Pin" type="Int" value="2" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Roadsign_Preprocessing_Filter.RoadSign" interface="" source="Marker_Detection_Filter.RoadSign_ext" />
+    <connection connection_priority="50" dest="Decision_Making.Emergency_Break" interface="" source="EmergencySTOP2.Decision_Making" />
+    <subgraph alias="Turning_Config" idref="Turning_Config" priority="23" />
+    <connection connection_priority="50" dest="Base_Config.brakeLightEnabled" interface="" source="Hold_Filter.Breaklight" />
+    <connection connection_priority="50" dest="Turning_Config.start_turning" interface="" source="Decision_Making.State_Turning" />
+    <connection connection_priority="50" dest="Turning_Config.distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="Turning_Config.us_struct" interface="" source="Base_Config.Ultrasonic_Struct" />
+    <connection connection_priority="50" dest="Turning_Config.depth_image" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="LaneTracking.CurrentVelocity" interface="" source="Turning_Config.velocity_LF" />
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="Turning_Config.stop_LF" />
+    <connection connection_priority="50" dest="EmergencySTOP2.Status" interface="" source="Turning_Config.stop_ES_Controler" />
+    <connection connection_priority="50" dest="Decision_Making.SteeringAngle" interface="" source="Turning_Config.steering" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Turning_Config.steering" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Turning_Config.turn_right_light" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalLeftEnabled" interface="" source="Turning_Config.turn_left_light" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML5.input_value" interface="" source="Turning_Config.velocity_turning" />
+    <connection connection_priority="50" dest="Decision_Making.Finished_Turning" interface="" source="Turning_Config.finish_turning" />
+    <filter alias="Harddisk_Recorder" idref="adtf.stg.harddisk_recorder" priority="24">
+     <settings>
+      <property name="filename" type="String" value="Test.dat" />
+      <property name="start_on_startup" type="Bool" value="true" />
+      <property name="active" type="Bool" value="false" />
+     </settings>
+    </filter>
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder.Image_Undist" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="LaneTracking.Drive_Straight" interface="" source="Turning_Config.drive_straight" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder.Lane_Tracking_GCL" interface="" source="LaneTracking.GLC_Output" />
+    <connection connection_priority="50" dest="Wheel_Speed_Controller.activate_filter" interface="" source="Turning_Config.stop_ES_Controler" />
+    <filter alias="AdaptiveCruiseControl" idref="adtf.aadc.AdaptiveCruiseControl" priority="25">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="AdaptiveCruiseControl.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="EmergencySTOP2.SpeedController" interface="" source="AADC_Calibration_XML.output_value" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="AdaptiveCruiseControl.Adaptive_Speed" />
+    <connection connection_priority="50" dest="AdaptiveCruiseControl.Desired_Speed" interface="" source="LaneTracking.Acceleration" />
+    <connection connection_priority="50" dest="AdaptiveCruiseControl.Set_State" interface="" source="Decision_Making.State_ACC" />
+    <filter alias="CrossingDetect2" idref="adtf.aadc.CrossingDetect" priority="26">
+     <settings>
+      <property name="Common::Show Debug" type="Bool" value="true" />
+      <property name="CrossingDetect::CornerHarrisblockSize" type="Int" value="4" />
+      <property name="CrossingDetect::CornerHarrisksize" type="Int" value="3" />
+      <property name="CrossingDetect::CornerHarrisparamK" type="Float" value="0,06.0" />
+      <property name="CrossingDetect::ThresholdValue2" type="Float" value="50.0" />
+      <property name="CrossingDetect::ThresholdValueCanny" type="Float" value="150.0" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="CrossingDetect2.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="CrossingDetect2.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="CrossingDetect2.Start" interface="" source="Decision_Making.SearchCrossing" />
+    <connection connection_priority="50" dest="Decision_Making.FoundCrossing" interface="" source="CrossingDetect2.DistanceToCrossingSpot" />
+    <connection connection_priority="50" dest="Turning_Config.distance_right_wheel" interface="" source="Tick_Filter.distance_overall_right" />
+    <connection connection_priority="50" dest="Turning_Config.distance_left_wheel" interface="" source="Tick_Filter.distance_overall_left" />
+    <filter alias="ParkDetection" idref="adtf.aadc.ParkDetection" priority="27">
+     <settings>
+      <property name="Common::Show Debug" type="Bool" value="true" />
+      <property name="ParkDetection::ThresholdValue" type="Float" value="0,0012.0" />
+      <property name="ParkDetection::ThresholdValue2" type="Float" value="40.0" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="ParkDetection.Start" interface="" source="Decision_Making.SearchParkingSpot" />
+    <connection connection_priority="50" dest="ParkDetection.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="ParkDetection.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="AdaptiveCruiseControl.Lane_Type" interface="" source="LaneTracking.LaneType" />
+    <filter alias="DriveRound" idref="adtf.aadc.aadc_DriveRound" priority="28">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="DriveRound.State_Lane_Following" />
+    <connection connection_priority="50" dest="EmergencySTOP2.Status" interface="" source="DriveRound.State_ES_WSC" />
+    <connection active="false" connection_priority="50" dest="Wheel_Speed_Controller.activate_filter" interface="" source="DriveRound.State_ES_WSC" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="DriveRound.Steering" />
+    <connection connection_priority="50" dest="Decision_Making.SteeringAngle" interface="" source="DriveRound.Steering" />
+    <connection connection_priority="50" dest="DriveRound.Start" interface="" source="AdaptiveCruiseControl.drive_round" />
+    <connection connection_priority="50" dest="DriveRound" interface="" source="Tick_Filter.distance_overall_right" />
+    <connection connection_priority="50" dest="DriveRound" interface="" source="Tick_Filter.distance_overall_left" />
+    <connection connection_priority="50" dest="DriveRound.US_Sensor_Right" interface="" source="Base_Config.Ultrasonic_Side_Right" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder.AADC_GLC_Output_alt" interface="" source="LaneTracking.GLC_Output_alt" />
+    <connection connection_priority="50" dest="DriveRound.US_Sensor_Front_Right" interface="" source="Base_Config.Ultrasonic_Front_Right" />
+    <connection connection_priority="50" dest="Wheel_Speed_Controller.set_WheelSpeed" interface="" source="DriveRound.Speed" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="DriveRound.turn-right_Light" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalLeftEnabled" interface="" source="DriveRound.turn-left_Light" />
+    <connection connection_priority="50" dest="AdaptiveCruiseControl.SteeringAngle" interface="" source="AADC_Calibration_XML2.output_value" />
+    <connection connection_priority="50" dest="AdaptiveCruiseControl" interface="" source="Decision_Making.OvertakingAllowed" />
+    <filter alias="Video_Display2" idref="adtf.visual.video_display" priority="29">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+      <property name="active" type="Bool" value="false" />
+     </settings>
+    </filter>
+    <connection active="false" connection_priority="50" dest="Video_Display2.input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="Decision_Making.FinishedOvertaking" interface="" source="DriveRound.StateToDM" />
+    <connection connection_priority="50" dest="DriveRound.Lane_Type" interface="" source="LaneTracking.LaneType" />
+    <filter alias="Video_Display3" idref="adtf.visual.video_display" priority="30">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+      <property name="active" type="Bool" value="false" />
+     </settings>
+    </filter>
+    <connection active="false" connection_priority="50" dest="Video_Display3.gcl_input" interface="" source="AdaptiveCruiseControl.GLC_Output" />
+    <connection active="false" connection_priority="50" dest="Video_Display3.input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="AdaptiveCruiseControl.US_Sensor_Front_Left" interface="" source="Base_Config.Ultrasonic_Front_Left" />
+    <connection connection_priority="50" dest="AdaptiveCruiseControl.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder.GCL_Crossing" interface="" source="CrossingDetect2.GLC_Output" />
+    <connection active="false" connection_priority="50" dest="Video_Display.gcl_input" interface="" source="CrossingDetect2.GLC_Output" />
+    <connection connection_priority="50" dest="Decision_Making.Distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="Cross_Parking_Config.depth_image" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="Cross_Parking_Config.sensor_front_left" interface="" source="Base_Config.Ultrasonic_Front_Left" />
+    <connection connection_priority="50" dest="Cross_Parking_Config.sensor_side_right" interface="" source="Base_Config.Ultrasonic_Side_Right" />
+    <connection connection_priority="50" dest="Decision_Making.Finished_Parking" interface="" source="Cross_Parking_Config.finish_parking" />
+    <connection connection_priority="50" dest="Cross_Parking_Config.distance_spot" interface="" source="ParkDetection.Dist_To_Parking_Spot" />
+    <connection connection_priority="50" dest="ParkDetection.Lane" interface="" source="LaneTracking.LaneDetails" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder.GLC_Park_Detect" interface="" source="ParkDetection.GLC_Output" />
+    <connection connection_priority="50" dest="Decision_Making.FoundParkingSpot" interface="" source="ParkDetection.Dist_To_Parking_Spot_DM" />
+    <filter alias="PullOut_Filter" idref="adtf.aadc.aadc_PullOutFilter" priority="31">
+     <settings>
+      <property name="Common::Show GCL Output" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="PullOut_Filter.us_struct" interface="" source="Base_Config.Ultrasonic_Struct" />
+    <connection connection_priority="50" dest="PullOut_Filter.StartPullOut" interface="" source="Decision_Making.State_PullOut" />
+    <connection connection_priority="50" dest="PullOut_Filter.Distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="PullOut_Filter.Distance_right_wheel" interface="" source="Tick_Filter.distance_overall_right" />
+    <connection connection_priority="50" dest="PullOut_Filter.Distance_left_wheel" interface="" source="Tick_Filter.distance_overall_left" />
+    <connection connection_priority="50" dest="PullOut_Filter.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="Turning_Config.start_turning" interface="" source="PullOut_Filter.StartTurningStruct" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="PullOut_Filter.Steering" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="PullOut_Filter.turn-right_Light" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalLeftEnabled" interface="" source="PullOut_Filter.turn-left_Light" />
+    <connection connection_priority="50" dest="Decision_Making.Finished_Pullout" interface="" source="PullOut_Filter.finish_pullOut" />
+    <connection connection_priority="50" dest="Base_Config.brakeLightEnabled" interface="" source="PullOut_Filter.Break_Light" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML5.input_value" interface="" source="PullOut_Filter.Speed" />
+    <connection connection_priority="50" dest="Parallel_Parking_Config.sensor_side_right" interface="" source="Base_Config.Ultrasonic_Side_Right" />
+    <connection connection_priority="50" dest="Parallel_Parking_Config.sensor_middle_rear" interface="" source="Base_Config.Ultrasonic_Rear_Center" />
+    <connection connection_priority="50" dest="Parallel_Parking_Config.distance_spot" interface="" source="ParkDetection.Dist_To_Parking_Spot" />
+    <connection connection_priority="50" dest="EmergencySTOP2.Status" interface="" source="Parallel_Parking_Config.stop_ES_Controler" />
+    <connection connection_priority="50" dest="Wheel_Speed_Controller.activate_filter" interface="" source="Parallel_Parking_Config.stop_ES_Controler" />
+    <connection connection_priority="50" dest="Decision_Making.Finished_Parking" interface="" source="Parallel_Parking_Config.finish_parking" />
+    <connection connection_priority="50" dest="ParkDetection.Stop" interface="" source="Cross_Parking_Config.stop_searching" />
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="PullOut_Filter.Start_LF" />
+    <connection connection_priority="50" dest="Wheel_Speed_Controller.activate_filter" interface="" source="PullOut_Filter.Start_ES" />
+    <connection connection_priority="50" dest="EmergencySTOP2.Status" interface="" source="PullOut_Filter.Start_ES" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder.GCL_CrossParking" interface="" source="Cross_Parking_Config.GCL_output" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder.GCL_TurningFilter" interface="" source="Turning_Config.GCL" />
+    <connection connection_priority="50" dest="PullOut_Filter.next_spot_free" interface="" source="Parallel_Parking_Config.nextSpotIsFree" />
+    <connection connection_priority="50" dest="ParkDetection.Stop" interface="" source="Parallel_Parking_Config.stop_searching" />
+    <filter alias="ZebraStripes" idref="adtf.aadc.ZebraStripes" priority="32">
+     <settings />
+    </filter>
+    <filter alias="Stop_Zebra_Stripes_Filter" idref="adtf.aadc.aadc_StopZebraStripesFilter" priority="33">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="ZebraStripes.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="ZebraStripes.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="ZebraStripes.Start" interface="" source="Decision_Making.Search_Zebra" />
+    <connection connection_priority="50" dest="ZebraStripes.Distance" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="Decision_Making.FoundZebraStripes" interface="" source="ZebraStripes.DistanceToZebraStripes" />
+    <connection connection_priority="50" dest="Stop_Zebra_Stripes_Filter.StopStruct" interface="" source="Decision_Making.State_StopZebra" />
+    <connection connection_priority="50" dest="Stop_Zebra_Stripes_Filter.us_struct" interface="" source="Base_Config.Ultrasonic_Struct" />
+    <connection connection_priority="50" dest="Stop_Zebra_Stripes_Filter.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="Stop_Zebra_Stripes_Filter.Distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="LaneTracking.CurrentVelocity" interface="" source="Stop_Zebra_Stripes_Filter.VelocityLT" />
+    <connection connection_priority="50" dest="Decision_Making.FinishedZebraStripe" interface="" source="Stop_Zebra_Stripes_Filter.finish_zebraStripes" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder.Zebra_Detect_GCL" interface="" source="ZebraStripes.GLC_Output" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder.GLC_Stop_Zebra" interface="" source="Stop_Zebra_Stripes_Filter.GLC_Output" />
+    <filter alias="CheckPullOut" idref="adtf.aadc.CheckPullOut" priority="34" />
+    <connection connection_priority="50" dest="CheckPullOut.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="CheckPullOut.Start" interface="" source="Decision_Making.CheckPullOut" />
+    <connection connection_priority="50" dest="CheckPullOut.US_FrontCenter" interface="" source="Base_Config.Ultrasonic_Front_Center" />
+    <connection connection_priority="50" dest="Decision_Making.Checked_Park_Type" interface="" source="CheckPullOut.bIsCrossParking" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder.GLC_PullOut" interface="" source="CheckPullOut.GLC_Output" />
+    <connection active="false" connection_priority="50" dest="Video_Display2.gcl_input" interface="" source="LaneTracking.GLC_Output_alt" />
+    <connection connection_priority="50" dest="Base_Config.brakeLightEnabled" interface="" source="Turning_Config.brake_light" />
+    <filter alias="Marker_Detection_Filter2" idref="adtf.markerDetection" priority="35">
+     <settings>
+      <property name="active" type="Bool" value="false" />
+      <property name="Video Output Pin" type="Int" value="2" />
+     </settings>
+    </filter>
+    <connection active="false" connection_priority="50" dest="Marker_Detection_Filter2.Video_RGB_input" interface="" source="Undistort.Image_Undist" />
+    <connection active="false" connection_priority="50" dest="Roadsign_Preprocessing_Filter.RoadSign" interface="" source="Marker_Detection_Filter2.RoadSign_ext" />
+    <filter alias="Video_Display4" idref="adtf.visual.video_display" priority="36">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Video_Display4.input" interface="" source="Marker_Detection_Filter.Video_RGB_output" />
+    <connection connection_priority="50" dest="State_Controller_OptiCar.Set_State_Complete" interface="" source="Decision_Making.Completed" />
+    <filter alias="Harddisk_Recorder2" idref="adtf.stg.harddisk_recorder" priority="37">
+     <settings>
+      <property name="filename" type="String" value="Jury_Data.dat" />
+      <property name="start_on_startup" type="Bool" value="true" />
+      <property name="active" type="Bool" value="false" />
+     </settings>
+    </filter>
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder2.Driver_Struct_SCOutput" interface="" source="State_Controller_OptiCar.Driver_Struct" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder2.Maneuvre_Code_SCOutput" interface="" source="State_Controller_OptiCar.Maneuvre_Code" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder2.Start_SCOutput" interface="" source="State_Controller_OptiCar.Start" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder2.Jury_ManeuverList_BaseOutput" interface="" source="Base_Config.Jury_ManeuverList" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder2.Increment_Maneuvre_DMOutput" interface="" source="Decision_Making.Increment_Maneuvre" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder2.Completed_DMOutput" interface="" source="Decision_Making.Completed" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder2.Jury_Struct_BaseOutput" interface="" source="Base_Config.Jury_Struct" />
+   </graph>
+  </configuration>
+  <configuration description="" name="Image_Processing">
+   <graph>
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="1">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="2">
+     <settings />
+    </filter>
+    <filter alias="Undistort" idref="adtf.example.undistort" priority="3" />
+    <filter alias="AADC_Bool_Value_Generator" idref="adtf.aadc.aadc_boolValueGenerator" priority="4">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Undistort.Image_Dist" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="Undistort.Image_Undist" />
+    <filter alias="ImageProcessing" idref="adtf.aadc.ImageProcessing" priority="6">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="ImageProcessing.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="ImageProcessing.Video_Input" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="Video_Display.gcl_input" interface="" source="ImageProcessing.GLC_Output" />
+   </graph>
+  </configuration>
+  <configuration description="" name="Cross_Parking_Config">
+   <graph>
+    <filter alias="Cross_Parking_Filter" idref="adtf.aadc.aadc_CrossParkingFilter" priority="1">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <inport alias="distance_overall" />
+    <inport alias="start_cross_parking" />
+    <outport alias="velocity_LF" />
+    <outport alias="stop_LF" />
+    <outport alias="stop_ES_Controler" />
+    <outport alias="steering" />
+    <outport alias="turn_right_light" />
+    <outport alias="reverse_light" />
+    <outport alias="finish_parking" />
+    <outport alias="hazzard_light" />
+    <connection connection_priority="50" dest="steering" interface="" source="Cross_Parking_Filter.Steering" />
+    <connection connection_priority="50" dest="turn_right_light" interface="" source="Cross_Parking_Filter.turn-right_Light" />
+    <connection connection_priority="50" dest="finish_parking" interface="" source="Cross_Parking_Filter.finish_Parking" />
+    <connection connection_priority="50" dest="reverse_light" interface="" source="Cross_Parking_Filter.reverse_Light" />
+    <connection connection_priority="50" dest="hazzard_light" interface="" source="Cross_Parking_Filter.Hazzard_Light" />
+    <outport alias="velocity_parking" />
+    <connection connection_priority="50" dest="velocity_parking" interface="" source="Cross_Parking_Filter.Speed" />
+    <filter alias="Stop_Filter_for_Cross_Parking" idref="adtf.stop_filter_cross_parking" priority="2">
+     <settings />
+    </filter>
+    <inport alias="depth_image" />
+    <inport alias="distance_spot" />
+    <inport alias="sensor_side_right" />
+    <inport alias="sensor_front_left" />
+    <outport alias="finish_stopping" />
+    <outport alias="no_valid_parking_spot" />
+    <outport alias="GCL_output" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Cross_Parking.Distance_overall" interface="" source="distance_overall" />
+    <connection connection_priority="50" dest="velocity_LF" interface="" source="Stop_Filter_for_Cross_Parking.Velocity_LT" />
+    <connection connection_priority="50" dest="finish_stopping" interface="" source="Stop_Filter_for_Cross_Parking.finish_Stopping" />
+    <connection connection_priority="50" dest="no_valid_parking_spot" interface="" source="Stop_Filter_for_Cross_Parking.shut_down" />
+    <connection connection_priority="50" dest="stop_LF" interface="" source="Stop_Filter_for_Cross_Parking.Stop_LF" />
+    <connection connection_priority="50" dest="stop_ES_Controler" interface="" source="Stop_Filter_for_Cross_Parking.Stop_ES" />
+    <connection connection_priority="50" dest="turn_right_light" interface="" source="Stop_Filter_for_Cross_Parking.right_light" />
+    <connection connection_priority="50" dest="GCL_output" interface="" source="Stop_Filter_for_Cross_Parking.GLC_Output" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Cross_Parking.StopStruct" interface="" source="start_cross_parking" />
+    <connection connection_priority="50" dest="Cross_Parking_Filter.StartCrossParking" interface="" source="Stop_Filter_for_Cross_Parking.finish_Stopping" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Cross_Parking.Depthimage_Input" interface="" source="depth_image" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Cross_Parking.Distance_spot" interface="" source="distance_spot" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Cross_Parking.Sensor_right" interface="" source="sensor_side_right" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Cross_Parking.Sensor_front_left" interface="" source="sensor_front_left" />
+    <filter alias="Switch_Boolvalue" idref="adtf.aadc.switchBool" priority="3" />
+    <outport alias="stop_searching" />
+    <connection connection_priority="50" dest="stop_searching" interface="" source="Switch_Boolvalue.output" />
+    <connection connection_priority="50" dest="Switch_Boolvalue.input" interface="" source="Stop_Filter_for_Cross_Parking.finish_Stopping" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Cross_Parking.Sensor_front_left" interface="" source="sensor_front_left" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Cross_Parking.Sensor_front_left" interface="" source="sensor_front_left" />
+   </graph>
+  </configuration>
+  <configuration description="" name="Parallel_Parking_Config">
+   <graph>
+    <filter alias="Parallel_Parking_Filter" idref="adtf.aadc.aadc_ParallelParkingFilter" priority="1">
+     <settings>
+      <property name="Time Stretch Factor" type="Float" value="1,52.0" />
+     </settings>
+    </filter>
+    <inport alias="distance_overall" />
+    <inport alias="start_parallel_parking" />
+    <outport alias="stop_LF" />
+    <outport alias="finish_parking" />
+    <outport alias="velocity_parking" />
+    <outport alias="hazzard_light" />
+    <outport alias="steering" />
+    <outport alias="turn_right_light" />
+    <outport alias="velocity_LF" />
+    <outport alias="reverse_light" />
+    <connection connection_priority="50" dest="steering" interface="" source="Parallel_Parking_Filter.Steering" />
+    <connection connection_priority="50" dest="hazzard_light" interface="" source="Parallel_Parking_Filter.Hazzard_Light" />
+    <connection connection_priority="50" dest="turn_right_light" interface="" source="Parallel_Parking_Filter.turn-right_Light" />
+    <connection connection_priority="50" dest="velocity_parking" interface="" source="Parallel_Parking_Filter.Speed" />
+    <connection connection_priority="50" dest="reverse_light" interface="" source="Parallel_Parking_Filter.reverse_Light" />
+    <connection connection_priority="50" dest="finish_parking" interface="" source="Parallel_Parking_Filter.finish_Parking" />
+    <filter alias="Stop_Filter_for_Parallel_Parking" idref="adtf.stop_filter_parallel_parking" priority="2" />
+    <inport alias="distance_spot" />
+    <inport alias="sensor_middle_rear" />
+    <inport alias="sensor_side_right" />
+    <outport alias="stop_ES_Controler" />
+    <outport alias="no_valid_parking_spot" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Parallel_Parking.Distance_overall" interface="" source="distance_overall" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Parallel_Parking.StopStruct" interface="" source="start_parallel_parking" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Parallel_Parking.Distance_spot" interface="" source="distance_spot" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Parallel_Parking.Sensor_middle_rear" interface="" source="sensor_middle_rear" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Parallel_Parking.Sensor_right" interface="" source="sensor_side_right" />
+    <connection connection_priority="50" dest="turn_right_light" interface="" source="Stop_Filter_for_Parallel_Parking.right_light" />
+    <connection connection_priority="50" dest="stop_LF" interface="" source="Stop_Filter_for_Parallel_Parking.Stop_LF" />
+    <connection connection_priority="50" dest="stop_ES_Controler" interface="" source="Stop_Filter_for_Parallel_Parking.Stop_ES" />
+    <connection connection_priority="50" dest="Parallel_Parking_Filter.StartParallelParking" interface="" source="Stop_Filter_for_Parallel_Parking.finish_Stopping" />
+    <connection connection_priority="50" dest="velocity_LF" interface="" source="Stop_Filter_for_Parallel_Parking.Velocity_LT" />
+    <connection connection_priority="50" dest="no_valid_parking_spot" interface="" source="Stop_Filter_for_Parallel_Parking.shut_down" />
+    <outport alias="nextSpotIsFree" />
+    <connection connection_priority="50" dest="nextSpotIsFree" interface="" source="Stop_Filter_for_Parallel_Parking.next_spot_is_free" />
+    <filter alias="Switch_Boolvalue" idref="adtf.aadc.switchBool" priority="3" />
+    <outport alias="stop_searching" />
+    <connection connection_priority="50" dest="stop_searching" interface="" source="Switch_Boolvalue.output" />
+    <connection connection_priority="50" dest="Switch_Boolvalue.input" interface="" source="Stop_Filter_for_Parallel_Parking.finish_Stopping" />
+   </graph>
+  </configuration>
+  <configuration description="" name="TestTurning">
+   <graph>
+    <filter alias="Test_Turning_Filter" idref="adtf.aadc.aadc_testTurningFilter" priority="2">
+     <settings>
+      <property name="Mode" type="Int" value="1" />
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <subgraph alias="Base_Config" idref="Base_Config" priority="1" />
+    <filter alias="AADC_Visualization" idref="adtf.aadc.aadc_visualization" priority="3">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Left" interface="" source="Base_Config.Ultrasonic_Front_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Center_Left" interface="" source="Base_Config.Ultrasonic_Front_Center_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Center" interface="" source="Base_Config.Ultrasonic_Front_Center" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Center_Right" interface="" source="Base_Config.Ultrasonic_Front_Center_Right" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Right" interface="" source="Base_Config.Ultrasonic_Front_Right" />
+    <filter alias="AADC_Signal_Value_Generator" idref="adtf.aadc.aadc_signalValueGenerator" priority="4">
+     <settings>
+      <property name="Default Value 2" type="Float" value="90.0" />
+      <property name="File for Default Values" type="String" value="../../../turnLeft.txt" />
+      <property name="active" type="Bool" value="false" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Calibration_XML" idref="adtf.aadc.aadc_calibrationXML" priority="5">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <connection active="false" connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="AADC_Signal_Value_Generator.Value_1" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML.output_value" />
+    <connection active="false" connection_priority="50" dest="Base_Config.SteeringController" interface="" source="AADC_Signal_Value_Generator.Value_2" />
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="6">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Side_Left" interface="" source="Base_Config.Ultrasonic_Side_Left" />
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="7">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="8">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display2" idref="adtf.visual.video_display" priority="9">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Undistort" idref="adtf.example.undistort" priority="10" />
+    <connection connection_priority="50" dest="Undistort.Image_Dist" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="Video_Display2.input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <filter alias="Tick_Filter" idref="adtf.aadc.aadc_tickFilter" priority="11">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Tick_Filter.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+    <filter alias="Test_Stop_Filter" idref="adtf.aadc.aadc_testStopFilter" priority="12">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+      <property name="Mode" type="Int" value="1" />
+     </settings>
+    </filter>
+    <subgraph alias="Turning_Config" idref="Turning_Config" priority="13" />
+    <connection connection_priority="50" dest="Turning_Config.distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="Turning_Config.distance_left_wheel" interface="" source="Tick_Filter.distance_overall_left" />
+    <connection connection_priority="50" dest="Turning_Config.distance_right_wheel" interface="" source="Tick_Filter.distance_overall_right" />
+    <connection connection_priority="50" dest="Turning_Config.us_struct" interface="" source="Base_Config.Ultrasonic_Struct" />
+    <connection connection_priority="50" dest="Turning_Config.start_turning" interface="" source="Test_Stop_Filter.StopStructTurning" />
+    <connection connection_priority="50" dest="Turning_Config.depth_image" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Turning_Config.steering" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Turning_Config.turn_right_light" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalLeftEnabled" interface="" source="Turning_Config.turn_left_light" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="Turning_Config.velocity_turning" />
+    <connection connection_priority="50" dest="Video_Display.gcl_input" interface="" source="Turning_Config.GCL" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Side_Right" interface="" source="Base_Config.Ultrasonic_Side_Right" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Rear_Left" interface="" source="Base_Config.Ultrasonic_Rear_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Rear_Center" interface="" source="Base_Config.Ultrasonic_Rear_Center" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Rear_Right" interface="" source="Base_Config.Ultrasonic_Rear_Right" />
+   </graph>
+  </configuration>
+  <configuration description="" name="TestRoadSignPreprocessing">
+   <graph>
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="1">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <filter alias="Undistort" idref="adtf.example.undistort" priority="2" />
+    <filter alias="Roadsign_Preprocessing_Filter" idref="adtf.road_sign_preprocessing" priority="3" />
+    <connection connection_priority="50" dest="Undistort.Image_Dist" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="4">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <filter alias="Marker_Detection_Filter" idref="adtf.markerDetection" priority="5">
+     <settings>
+      <property name="Calibration File for used Camera" type="String" value="../../../configuration_files/xtionIntrinsicCalib.yml" />
+      <property name="Dictionary File For Markers" type="String" value="../../../configuration_files/roadsign.yml" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Marker_Detection_Filter.Video_RGB_input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="Roadsign_Preprocessing_Filter.RoadSign" interface="" source="Marker_Detection_Filter.RoadSign_ext" />
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="Marker_Detection_Filter.Video_RGB_output" />
+   </graph>
+  </configuration>
+  <configuration description="" name="AngleCalibration">
+   <graph>
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="1">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="2">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Bool_Value_Generator" idref="adtf.aadc.aadc_boolValueGenerator" priority="3">
+     <settings />
+    </filter>
+    <filter alias="CameraAngleCalibration" idref="adtf.CameraAngleCalibration" priority="4" />
+    <connection connection_priority="50" dest="CameraAngleCalibration.StartCalibrating" interface="" source="AADC_Bool_Value_Generator.BoolValue" />
+    <connection connection_priority="50" dest="CameraAngleCalibration.RGB_Image_In" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="CameraAngleCalibration.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="CameraAngleCalibration.RGB_Image_Out" />
+    <connection connection_priority="50" dest="Video_Display.gcl_input" interface="" source="CameraAngleCalibration.GLC_Output" />
+   </graph>
+  </configuration>
+  <configuration description="" name="Turning_Config">
+   <graph>
+    <inport alias="distance_overall" />
+    <inport alias="start_turning" />
+    <inport alias="us_struct" />
+    <inport alias="depth_image" />
+    <outport alias="velocity_LF" />
+    <outport alias="stop_LF" />
+    <outport alias="stop_ES_Controler" />
+    <outport alias="steering" />
+    <outport alias="turn_right_light" />
+    <outport alias="turn_left_light" />
+    <outport alias="velocity_turning" />
+    <outport alias="finish_turning" />
+    <outport alias="GCL" />
+    <outport alias="drive_straight" />
+    <filter alias="Stop_Turning_Filter" idref="adtf.aadc.aadc_StopTurningFilter" priority="1">
+     <settings>
+      <property name="Common::Show GCL Output" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Turning_Filter2" idref="adtf.aadc.aadc_TurningFilter" priority="1" />
+    <inport alias="distance_left_wheel" />
+    <inport alias="distance_right_wheel" />
+    <connection connection_priority="50" dest="Stop_Turning_Filter.StartTurningStruct" interface="" source="start_turning" />
+    <connection connection_priority="50" dest="Stop_Turning_Filter.Distance_overall" interface="" source="distance_overall" />
+    <connection connection_priority="50" dest="Stop_Turning_Filter.us_struct" interface="" source="us_struct" />
+    <connection connection_priority="50" dest="Stop_Turning_Filter.Depthimage_Input" interface="" source="depth_image" />
+    <connection connection_priority="50" dest="Turning_Filter2" interface="" source="Stop_Turning_Filter.StartTurning" />
+    <connection connection_priority="50" dest="velocity_turning" interface="" source="Stop_Turning_Filter.Speed" />
+    <connection connection_priority="50" dest="stop_LF" interface="" source="Stop_Turning_Filter.Stop_LF" />
+    <connection connection_priority="50" dest="stop_ES_Controler" interface="" source="Stop_Turning_Filter.Stop_ES" />
+    <connection connection_priority="50" dest="velocity_LF" interface="" source="Stop_Turning_Filter.Velocity" />
+    <connection connection_priority="50" dest="turn_right_light" interface="" source="Stop_Turning_Filter.turn-right_Light" />
+    <connection connection_priority="50" dest="turn_left_light" interface="" source="Stop_Turning_Filter.turn-left_Light" />
+    <connection connection_priority="50" dest="drive_straight" interface="" source="Stop_Turning_Filter.Drive_Straight" />
+    <connection connection_priority="50" dest="GCL" interface="" source="Stop_Turning_Filter.GLC_Output" />
+    <connection connection_priority="50" dest="Turning_Filter2.us_struct" interface="" source="us_struct" />
+    <connection connection_priority="50" dest="Turning_Filter2.Distance_overall" interface="" source="distance_overall" />
+    <connection connection_priority="50" dest="Turning_Filter2.Distance_right_wheel" interface="" source="distance_right_wheel" />
+    <connection connection_priority="50" dest="Turning_Filter2.Distance_left_wheel" interface="" source="distance_left_wheel" />
+    <connection connection_priority="50" dest="velocity_turning" interface="" source="Turning_Filter2.Speed" />
+    <connection connection_priority="50" dest="steering" interface="" source="Turning_Filter2.Steering" />
+    <connection connection_priority="50" dest="turn_right_light" interface="" source="Turning_Filter2.turn-right_Light" />
+    <connection connection_priority="50" dest="turn_left_light" interface="" source="Turning_Filter2.turn-left_Light" />
+    <connection connection_priority="50" dest="finish_turning" interface="" source="Turning_Filter2.finish_Turning" />
+    <connection connection_priority="50" dest="stop_ES_Controler" interface="" source="Turning_Filter2.Start_ES" />
+    <outport alias="brake_light" />
+    <connection connection_priority="50" dest="brake_light" interface="" source="Turning_Filter2.Break_Light" />
+   </graph>
+  </configuration>
+  <configuration description="" name="CrossDetection">
+   <graph>
+    <filter alias="CrossingDetect" idref="adtf.aadc.CrossingDetect" priority="1">
+     <settings>
+      <property name="Common::Show Debug" type="Bool" value="true" />
+      <property name="CrossingDetect::CornerHarrisparamK" type="Float" value="0,001.0" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="2">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="3">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <filter alias="Undistort" idref="adtf.example.undistort" priority="4">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Video_Display.gcl_input" interface="" source="CrossingDetect.GLC_Output" />
+    <connection connection_priority="50" dest="Undistort.Image_Dist" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="CrossingDetect.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="CrossingDetect.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <filter alias="Crossing_Maneuver_Generator" idref="adtf.aadc.aadc_CrossingManeuverGenerator" priority="5">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="CrossingDetect.Start" interface="" source="Crossing_Maneuver_Generator.CrossingStruct" />
+   </graph>
+  </configuration>
+  <configuration description="" name="PLAYER">
+   <graph>
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="1">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="2" />
+    <filter alias="Harddisk_Player2" idref="adtf.stg.harddisk_player" priority="3">
+     <settings>
+      <property name="filename" type="String" value="./OCDriving_012.dat" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display2" idref="adtf.visual.video_display" priority="4">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display3" idref="adtf.visual.video_display" priority="5">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display4" idref="adtf.visual.video_display" priority="6">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display5" idref="adtf.visual.video_display" priority="7">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Video_Display3.input" interface="" source="Harddisk_Player2.Image_Undist" />
+    <connection connection_priority="50" dest="Video_Display3.gcl_input" interface="" source="Harddisk_Player2.GLC_LiT" />
+   </graph>
+  </configuration>
+  <configuration description="" name="AdaptiveCruiseControl">
+   <graph>
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="1">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="2">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Undistort" idref="adtf.example.undistort" priority="3" />
+    <filter alias="AADC_Bool_Value_Generator" idref="adtf.aadc.aadc_boolValueGenerator" priority="4">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="AdaptiveCruiseControl.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="Undistort.Image_Dist" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="AdaptiveCruiseControl.Set_State" interface="" source="AADC_Bool_Value_Generator.BoolValue" />
+    <filter alias="AdaptiveCruiseControl" idref="adtf.aadc.AdaptiveCruiseControl" priority="5">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Video_Display.gcl_input" interface="" source="AdaptiveCruiseControl.GLC_Output" />
+    <filter alias="AADC_Signal_Value_Generator" idref="adtf.aadc.aadc_signalValueGenerator" priority="7">
+     <settings>
+      <property name="Default Value 1" type="Float" value="1,5.0" />
+      <property name="Default Value 2" type="Float" value="90.0" />
+      <property name="File for Default Values" type="String" value="../../../ACC.txt" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="AdaptiveCruiseControl.Desired_Speed" interface="" source="AADC_Signal_Value_Generator.Value_1" />
+    <filter alias="AADC_Calibration_XML" idref="adtf.aadc.aadc_calibrationXML" priority="8">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="AdaptiveCruiseControl.Adaptive_Speed" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML.output_value" />
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="9" />
+    <subgraph alias="Base_Config" idref="Base_Config" priority="9" />
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="10">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <connection connection_priority="50" dest="AdaptiveCruiseControl.SteeringAngle" interface="" source="AADC_Signal_Value_Generator.Value_2" />
+   </graph>
+  </configuration>
+  <configuration description="" name="TestTurningNeu">
+   <graph>
+    <filter alias="AADC_Signal_Value_Generator" idref="adtf.aadc.aadc_signalValueGenerator" priority="1">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+      <property name="Default Value 2" type="Float" value="90.0" />
+      <property name="File for Default Values" type="String" value="../../../kurvenfahrtgross.txt" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Calibration_XML" idref="adtf.aadc.aadc_calibrationXML" priority="2">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="3">
+     <settings />
+    </filter>
+    <filter alias="Tick_Filter" idref="adtf.aadc.aadc_tickFilter" priority="4">
+     <settings />
+    </filter>
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="6" />
+    <subgraph alias="Base_Config" idref="Base_Config" priority="5" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="AADC_Signal_Value_Generator.Value_1" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML.output_value" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="AADC_Signal_Value_Generator.Value_2" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+   </graph>
+  </configuration>
+  <configuration description="" name="DecisionMaking2Copy3012">
+   <graph>
+    <filter alias="AADC_Calibration_XML" idref="adtf.aadc.aadc_calibrationXML" priority="1">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Calibration_XML2" idref="adtf.aadc.aadc_calibrationXML" priority="2">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../configuration_files/SteeringActuatorLaneTracking.xml" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="3">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="4">
+     <settings />
+    </filter>
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="5">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Hold_Filter" idref="adtf.hold_filter" priority="6" />
+    <filter alias="Roadsign_Preprocessing_Filter" idref="adtf.road_sign_preprocessing" priority="7" />
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="8">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Calibration_XML3" idref="adtf.aadc.aadc_calibrationXML" priority="9">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuatorInverse_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Calibration_XML4" idref="adtf.aadc.aadc_calibrationXML" priority="10">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <filter alias="LaneTracking" idref="adtf.lane_tracking" priority="11">
+     <settings>
+      <property name="Common::Drive Time in milliseconds" type="Int" value="0" />
+      <property name="Common::Enable Lightbeam Trigger" type="Bool" value="true" />
+      <property name="Common::Show Debug" type="Bool" value="true" />
+      <property name="LaneDetection::Far area::Far Line" type="Int" value="330" />
+      <property name="LaneDetection::Far area::Lane width max far" type="Int" value="300" />
+      <property name="LaneDetection::Far area::Lane width min far" type="Int" value="160" />
+      <property name="LaneDetection::Near area::Lane width max near" type="Int" value="450" />
+      <property name="LaneDetection::Near area::Lane width min near" type="Int" value="280" />
+      <property name="LaneDetection::Near area::Near Line" type="Int" value="400" />
+      <property name="LaneDetection::ThresholdValue" type="Int" value="50" />
+      <property name="PID::Controller Proportional Gain" type="Float" value="0,1.0" />
+     </settings>
+    </filter>
+    <filter alias="Decision_Making" idref="adtf.decision_making" priority="12">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="State_Controller_OptiCar" idref="adtf.state_controller" priority="13">
+     <settings />
+    </filter>
+    <filter alias="Undistort" idref="adtf.example.undistort" priority="14" />
+    <filter alias="Tick_Filter" idref="adtf.aadc.aadc_tickFilter" priority="15">
+     <settings />
+    </filter>
+    <filter alias="AADC_Calibration_XML5" idref="adtf.aadc.aadc_calibrationXML" priority="16">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <filter alias="Wheel_Speed_Controller" idref="adtf.aadc.wheelSpeedController" priority="17">
+     <settings />
+    </filter>
+    <filter alias="ImageProcessing" idref="adtf.aadc.ImageProcessing" priority="18">
+     <settings>
+      <property name="ImageProcessing::CornerHarrisblockSize" type="Int" value="5" />
+      <property name="ImageProcessing::CornerHarrisksize" type="Int" value="7" />
+      <property name="ImageProcessing::CornerHarrisparamK" type="Float" value="0,05.0" />
+      <property name="ImageProcessing::ImagecutHeightDown" type="Int" value="400" />
+      <property name="ImageProcessing::ImagecutWidthLeft" type="Int" value="320" />
+      <property name="ImageProcessing::ImagecutWidthRight" type="Int" value="640" />
+      <property name="ImageProcessing::ThresholdValue" type="Float" value="0,0001.0" />
+      <property name="ImageProcessing::ThresholdValue2" type="Float" value="80.0" />
+     </settings>
+    </filter>
+    <filter alias="EmergencySTOP2" idref="adtf.example.Emergency_STOP" priority="19">
+     <settings>
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Marker_Detection_Filter" idref="adtf.markerDetection" priority="20">
+     <settings>
+      <property name="Calibration File for used Camera" type="String" value="../../../src/aadcUser/calibration/xtion_intrinsic_calib.yml" />
+      <property name="Dictionary File For Markers" type="String" value="../../../configuration_files/roadsign.yml" />
+     </settings>
+    </filter>
+    <filter alias="CrossingDetect" idref="adtf.aadc.CrossingDetect" priority="21">
+     <settings>
+      <property name="Common::Show Debug" type="Bool" value="true" />
+      <property name="CrossingDetect::ImagecutHeightDown" type="Int" value="450" />
+     </settings>
+    </filter>
+    <filter alias="Harddisk_Recorder" idref="adtf.stg.harddisk_recorder" priority="22">
+     <settings>
+      <property name="active" type="Bool" value="false" />
+      <property name="compress_file" type="Bool" value="true" />
+      <property name="filename" type="String" value="Test.dat" />
+      <property name="start_on_startup" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Turning_Filter" idref="adtf.aadc.aadc_TurningFilter" priority="27" />
+    <subgraph alias="Base_Config" idref="Base_Config" priority="23" />
+    <subgraph alias="Cross_Parking_Config" idref="Cross_Parking_Config" priority="24" />
+    <subgraph alias="Parallel_Parking_Config" idref="Parallel_Parking_Config" priority="25" />
+    <subgraph active="false" alias="Turning_Config" idref="Turning_Config" priority="26" />
+    <connection connection_priority="50" dest="Base_Config.Driver_Struct" interface="" source="State_Controller_OptiCar.Driver_Struct" />
+    <connection connection_priority="50" dest="State_Controller_OptiCar.Jury_Struct" interface="" source="Base_Config.Jury_Struct" />
+    <connection connection_priority="50" dest="State_Controller_OptiCar.Maneuver_List" interface="" source="Base_Config.Jury_ManeuverList" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="Hold_Filter.ZeroVelocity" />
+    <connection connection_priority="50" dest="Decision_Making.RoadSign" interface="" source="Roadsign_Preprocessing_Filter.RoadSignsFiltered" />
+    <connection connection_priority="50" dest="Hold_Filter" interface="" source="Decision_Making.State_Hold" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="AADC_Calibration_XML2.output_value" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML4.output_value" />
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="Decision_Making.State_Lane_Following" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML2.input_value" interface="" source="LaneTracking.Steering_Angle" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="LaneTracking.Acceleration" />
+    <connection connection_priority="50" dest="Base_Config.headLightEnabled" interface="" source="LaneTracking.HeadLights" />
+    <connection connection_priority="50" dest="Video_Display.gcl_input" interface="" source="LaneTracking.GLC_Output" />
+    <connection connection_priority="50" dest="Decision_Making" interface="" source="State_Controller_OptiCar.Maneuvre_Code" />
+    <connection connection_priority="50" dest="Decision_Making.State_Decision_Making" interface="" source="State_Controller_OptiCar.Start" />
+    <connection connection_priority="50" dest="State_Controller_OptiCar.Increment_Maneuver_ID" interface="" source="Decision_Making.Increment_Maneuvre" />
+    <connection connection_priority="50" dest="Undistort.Image_Dist" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="LaneTracking.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="Decision_Making.CarSpeed" interface="" source="Tick_Filter.car_speed" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML5.output_value" />
+    <connection connection_priority="50" dest="Wheel_Speed_Controller.set_WheelSpeed" interface="" source="AADC_Calibration_XML3.output_value" />
+    <connection connection_priority="50" dest="Wheel_Speed_Controller.measured_wheelSpeed" interface="" source="Tick_Filter.car_speed" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML4.input_value" interface="" source="Wheel_Speed_Controller.actuator_output" />
+    <connection connection_priority="50" dest="ImageProcessing.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="ImageProcessing.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="ImageProcessing.Start" interface="" source="Decision_Making.SearchParkingSpot" />
+    <connection connection_priority="50" dest="Decision_Making.FoundParkingSpot" interface="" source="ImageProcessing.DistanceToParkingSpot" />
+    <connection connection_priority="50" dest="Cross_Parking_Config.distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="Cross_Parking_Config.start_cross_parking" interface="" source="Decision_Making.State_CrossPark" />
+    <connection connection_priority="50" dest="LaneTracking.CurrentVelocity" interface="" source="Cross_Parking_Config.velocity_LF" />
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="Cross_Parking_Config.stop_LF" />
+    <connection connection_priority="50" dest="Wheel_Speed_Controller.activate_filter" interface="" source="Cross_Parking_Config.stop_ES_Controler" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Cross_Parking_Config.steering" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Cross_Parking_Config.turn_right_light" />
+    <connection connection_priority="50" dest="Base_Config.reverseLightsEnabled" interface="" source="Cross_Parking_Config.reverse_light" />
+    <connection connection_priority="50" dest="Base_Config.hazzardLightsEnabled" interface="" source="Cross_Parking_Config.hazzard_light" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML5.input_value" interface="" source="Cross_Parking_Config.velocity_parking" />
+    <connection connection_priority="50" dest="Parallel_Parking_Config.start_parallel_parking" interface="" source="Decision_Making.State_ParallelPark" />
+    <connection connection_priority="50" dest="Parallel_Parking_Config.distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="Parallel_Parking_Config.stop_LF" />
+    <connection connection_priority="50" dest="Base_Config.reverseLightsEnabled" interface="" source="Parallel_Parking_Config.reverse_light" />
+    <connection connection_priority="50" dest="LaneTracking.CurrentVelocity" interface="" source="Parallel_Parking_Config.velocity_LF" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Parallel_Parking_Config.turn_right_light" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Parallel_Parking_Config.steering" />
+    <connection connection_priority="50" dest="Base_Config.hazzardLightsEnabled" interface="" source="Parallel_Parking_Config.hazzard_light" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML5.input_value" interface="" source="Parallel_Parking_Config.velocity_parking" />
+    <connection connection_priority="50" dest="LaneTracking.CurrentVelocity" interface="" source="Decision_Making.VelocityLF" />
+    <connection connection_priority="50" dest="Decision_Making.SteeringAngle" interface="" source="AADC_Calibration_XML2.output_value" />
+    <connection connection_priority="50" dest="Decision_Making.SteeringAngle" interface="" source="Parallel_Parking_Config.steering" />
+    <connection connection_priority="50" dest="Decision_Making.SteeringAngle" interface="" source="Cross_Parking_Config.steering" />
+    <connection connection_priority="50" dest="EmergencySTOP2.ServoAngle" interface="" source="AADC_Calibration_XML2.output_value" />
+    <connection connection_priority="50" dest="EmergencySTOP2.CarSpeed" interface="" source="Tick_Filter.car_speed" />
+    <connection connection_priority="50" dest="EmergencySTOP2.SpeedController" interface="" source="AADC_Calibration_XML.output_value" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML3.input_value" interface="" source="EmergencySTOP2.SpeedOut" />
+    <connection connection_priority="50" dest="Base_Config.brakeLightEnabled" interface="" source="EmergencySTOP2.Breaklight" />
+    <connection connection_priority="50" dest="EmergencySTOP2.us_struct" interface="" source="Base_Config.Ultrasonic_Struct" />
+    <connection connection_priority="50" dest="EmergencySTOP2.Status" interface="" source="Cross_Parking_Config.stop_ES_Controler" />
+    <connection connection_priority="50" dest="Marker_Detection_Filter.Video_RGB_input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="Roadsign_Preprocessing_Filter.RoadSign" interface="" source="Marker_Detection_Filter.RoadSign_ext" />
+    <connection connection_priority="50" dest="Decision_Making.Emergency_Break" interface="" source="EmergencySTOP2.Decision_Making" />
+    <connection connection_priority="50" dest="Base_Config.brakeLightEnabled" interface="" source="Hold_Filter.Breaklight" />
+    <connection active="false" connection_priority="50" dest="Turning_Config.start_turning" interface="" source="Decision_Making.State_Turning" />
+    <connection active="false" connection_priority="50" dest="Turning_Config.distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection active="false" connection_priority="50" dest="Turning_Config.us_struct" interface="" source="Base_Config.Ultrasonic_Struct" />
+    <connection active="false" connection_priority="50" dest="Turning_Config.depth_image" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection active="false" connection_priority="50" dest="LaneTracking.CurrentVelocity" interface="" source="Turning_Config.velocity_LF" />
+    <connection active="false" connection_priority="50" dest="LaneTracking.start" interface="" source="Turning_Config.stop_LF" />
+    <connection active="false" connection_priority="50" dest="EmergencySTOP2.Status" interface="" source="Turning_Config.stop_ES_Controler" />
+    <connection active="false" connection_priority="50" dest="Decision_Making.SteeringAngle" interface="" source="Turning_Config.steering" />
+    <connection active="false" connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Turning_Config.steering" />
+    <connection active="false" connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Turning_Config.turn_right_light" />
+    <connection active="false" connection_priority="50" dest="Base_Config.turnSignalLeftEnabled" interface="" source="Turning_Config.turn_left_light" />
+    <connection active="false" connection_priority="50" dest="AADC_Calibration_XML5.input_value" interface="" source="Turning_Config.velocity_turning" />
+    <connection active="false" connection_priority="50" dest="Decision_Making.Finished_Turning" interface="" source="Turning_Config.finish_turning" />
+    <connection connection_priority="50" dest="CrossingDetect.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="CrossingDetect.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="CrossingDetect.Start" interface="" source="Decision_Making.SearchCrossing" />
+    <connection connection_priority="50" dest="Decision_Making.FoundCrossing" interface="" source="CrossingDetect.DistanceToCrossingSpot" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder.Image_Undist" interface="" source="Undistort.Image_Undist" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder.Cross_Detection_GCL" interface="" source="CrossingDetect.GLC_Output" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder.Main_Velocities" interface="" source="AADC_Calibration_XML4.output_value" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder.Stop_Velocity" interface="" source="Turning_Config.velocity_LF" />
+    <connection active="false" connection_priority="50" dest="LaneTracking.Drive_Straight" interface="" source="Turning_Config.drive_straight" />
+    <connection active="false" connection_priority="50" dest="Harddisk_Recorder.Lane_Tracking_GCL" interface="" source="LaneTracking.GLC_Output" />
+    <connection active="false" connection_priority="50" dest="Wheel_Speed_Controller.activate_filter" interface="" source="Turning_Config.stop_ES_Controler" />
+    <connection connection_priority="50" dest="Wheel_Speed_Controller.activate_filter" interface="" source="Turning_Filter.Stop_ES" />
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="Turning_Filter.Stop_LF" />
+    <connection connection_priority="50" dest="LaneTracking.CurrentVelocity" interface="" source="Turning_Filter.Velocity" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Turning_Filter.Steering" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML5.input_value" interface="" source="Turning_Filter.Speed" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Turning_Filter.turn-right_Light" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalLeftEnabled" interface="" source="Turning_Filter.turn-left_Light" />
+    <connection connection_priority="50" dest="Decision_Making.Finished_Turning" interface="" source="Turning_Filter.finish_Turning" />
+    <connection connection_priority="50" dest="LaneTracking" interface="" source="Turning_Filter.Drive_Straight" />
+    <connection connection_priority="50" dest="Turning_Filter.Distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="Turning_Filter.Distance_right_wheel" interface="" source="Tick_Filter.distance_overall_right" />
+    <connection connection_priority="50" dest="Turning_Filter.Distance_left_wheel" interface="" source="Tick_Filter.distance_overall_left" />
+    <connection connection_priority="50" dest="Turning_Filter.us_struct" interface="" source="Base_Config.Ultrasonic_Struct" />
+    <connection connection_priority="50" dest="Turning_Filter.StartTurning" interface="" source="Decision_Making.State_Turning" />
+    <connection connection_priority="50" dest="Turning_Filter.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="EmergencySTOP2.Status" interface="" source="Turning_Filter.Stop_ES" />
+   </graph>
+  </configuration>
+  <configuration description="" name="DriveAround">
+   <graph>
+    <filter alias="AADC_Signal_Value_Generator" idref="adtf.aadc.aadc_signalValueGenerator" priority="1">
+     <settings>
+      <property name="Default Value 2" type="Float" value="90.0" />
+      <property name="File for Default Values" type="String" value="../../../ChangeSide2.txt" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="3">
+     <settings />
+    </filter>
+    <filter alias="AADC_Calibration_XML" idref="adtf.aadc.aadc_calibrationXML" priority="4">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <subgraph alias="Base_Config" idref="Base_Config" priority="2" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <connection active="false" connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="AADC_Signal_Value_Generator.Value_1" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML.output_value" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="AADC_Signal_Value_Generator.Value_2" />
+    <filter alias="Tick_Filter" idref="adtf.aadc.aadc_tickFilter" priority="5">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Tick_Filter.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+   </graph>
+  </configuration>
+  <configuration description="" name="TestParkingMultiSpots">
+   <graph>
+    <filter alias="AADC_Calibration_XML" idref="adtf.aadc.aadc_calibrationXML" priority="1">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="2">
+     <settings />
+    </filter>
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="3" />
+    <filter alias="Cross_Parking_Filter" idref="adtf.aadc.aadc_CrossParkingFilter" priority="4">
+     <settings>
+      <property name="active" type="Bool" value="false" />
+      <property name="Time Stretch Factor" type="Float" value="1,2.0" />
+     </settings>
+    </filter>
+    <filter alias="Test_Stop_Filter_for_Parking" idref="adtf.test_stop_filter_parking" priority="6" />
+    <filter alias="AADC_Bool_Value_Generator3" idref="adtf.aadc.aadc_boolValueGenerator" priority="7">
+     <settings />
+    </filter>
+    <filter alias="Stop_Filter_for_Cross_Parking" idref="adtf.stop_filter_cross_parking" priority="8">
+     <settings>
+      <property name="active" type="Bool" value="false" />
+     </settings>
+    </filter>
+    <filter alias="Tick_Filter" idref="adtf.aadc.aadc_tickFilter" priority="9">
+     <settings />
+    </filter>
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="10">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <subgraph alias="Base_Config" idref="Base_Config" priority="5" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML.output_value" />
+    <connection active="false" connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="Cross_Parking_Filter.Speed" />
+    <connection active="false" connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Cross_Parking_Filter.Steering" />
+    <connection active="false" connection_priority="50" dest="Base_Config.hazzardLightsEnabled" interface="" source="Cross_Parking_Filter.Hazzard_Light" />
+    <connection active="false" connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Cross_Parking_Filter.turn-right_Light" />
+    <connection active="false" connection_priority="50" dest="Base_Config.reverseLightsEnabled" interface="" source="Cross_Parking_Filter.reverse_Light" />
+    <connection connection_priority="50" dest="Test_Stop_Filter_for_Parking.StartBool" interface="" source="AADC_Bool_Value_Generator3.BoolValue" />
+    <connection active="false" connection_priority="50" dest="Stop_Filter_for_Cross_Parking.Distance_spot" interface="" source="Test_Stop_Filter_for_Parking.Distance_parking_spot" />
+    <connection active="false" connection_priority="50" dest="Stop_Filter_for_Cross_Parking" interface="" source="Test_Stop_Filter_for_Parking.StopStruct" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+    <connection active="false" connection_priority="50" dest="Stop_Filter_for_Cross_Parking.Distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="Test_Stop_Filter_for_Parking.Distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection active="false" connection_priority="50" dest="Stop_Filter_for_Cross_Parking.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <filter alias="LaneTracking" idref="adtf.lane_tracking" priority="11">
+     <settings>
+      <property name="LongitudinalControl::Max Acceleration" type="Float" value="1.0" />
+      <property name="Common::Drive Time in milliseconds" type="Int" value="0" />
+      <property name="Common::Enable Lightbeam Trigger" type="Bool" value="true" />
+      <property name="Common::Show Debug" type="Bool" value="true" />
+      <property name="LaneDetection::Far area::Far Line" type="Int" value="330" />
+      <property name="LaneDetection::Far area::Lane width max far" type="Int" value="380" />
+      <property name="LaneDetection::Far area::Lane width min far" type="Int" value="240" />
+      <property name="LaneDetection::Near area::Lane width max near" type="Int" value="530" />
+      <property name="LaneDetection::Near area::Lane width min near" type="Int" value="380" />
+      <property name="LaneDetection::Near area::Near Line" type="Int" value="400" />
+      <property name="LaneDetection::ThresholdValue" type="Int" value="20" />
+      <property name="PID::Controller Proportional Gain" type="Float" value="0,1.0" />
+     </settings>
+    </filter>
+    <filter alias="Undistort" idref="adtf.example.undistort" priority="12" />
+    <connection active="false" connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Stop_Filter_for_Cross_Parking.right_light" />
+    <connection connection_priority="50" dest="LaneTracking.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="Undistort.Image_Dist" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="AADC_Bool_Value_Generator3.BoolValue" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="LaneTracking.Acceleration" />
+    <connection active="false" connection_priority="50" dest="LaneTracking.CurrentVelocity" interface="" source="Stop_Filter_for_Cross_Parking.Velocity_LT" />
+    <connection active="false" connection_priority="50" dest="LaneTracking.start" interface="" source="Stop_Filter_for_Cross_Parking.Stop_LF" />
+    <filter alias="AADC_Calibration_XML2" idref="adtf.aadc.aadc_calibrationXML" priority="12">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../configuration_files/SteeringActuatorLaneTracking.xml" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="AADC_Calibration_XML2.output_value" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML2.input_value" interface="" source="LaneTracking.Steering_Angle" />
+    <filter alias="AADC_Visualization" idref="adtf.aadc.aadc_visualization" priority="13">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Side_Right" interface="" source="Base_Config.Ultrasonic_Side_Right" />
+    <filter alias="AADC_Bool_Value_Generator4" idref="adtf.aadc.aadc_boolValueGenerator" priority="7">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="AADC_Bool_Value_Generator4.BoolValue" />
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="14" />
+    <connection active="false" connection_priority="50" dest="Video_Display.gcl_input" interface="" source="Stop_Filter_for_Cross_Parking.GLC_Output" />
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="Undistort.Image_Undist" />
+    <connection active="false" connection_priority="50" dest="Stop_Filter_for_Cross_Parking.Sensor_front_left" interface="" source="Base_Config.Ultrasonic_Front_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Left" interface="" source="Base_Config.Ultrasonic_Front_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Side_Left" interface="" source="Base_Config.Ultrasonic_Side_Left" />
+    <connection active="false" connection_priority="50" dest="Stop_Filter_for_Cross_Parking.Sensor_right" interface="" source="Base_Config.Ultrasonic_Side_Left" />
+    <filter alias="Stop_Filter_for_Parallel_Parking" idref="adtf.stop_filter_parallel_parking" priority="15" />
+    <connection connection_priority="50" dest="LaneTracking.CurrentVelocity" interface="" source="Stop_Filter_for_Parallel_Parking.Velocity_LT" />
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="Stop_Filter_for_Parallel_Parking.Stop_LF" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Parallel_Parking.Distance_overall" interface="" source="Tick_Filter.distance_overall_right" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Parallel_Parking" interface="" source="Test_Stop_Filter_for_Parking.StopStruct" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Parallel_Parking.Distance_spot" interface="" source="Test_Stop_Filter_for_Parking.Distance_parking_spot" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Parallel_Parking.Sensor_middle_rear" interface="" source="Base_Config.Ultrasonic_Rear_Center" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Stop_Filter_for_Parallel_Parking.right_light" />
+    <connection connection_priority="50" dest="Stop_Filter_for_Parallel_Parking.Sensor_right" interface="" source="Base_Config.Ultrasonic_Side_Left" />
+   </graph>
+  </configuration>
+  <configuration description="" name="TestPullOut">
+   <graph>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="2">
+     <settings />
+    </filter>
+    <filter alias="PullOut_Filter" idref="adtf.aadc.aadc_PullOutFilter" priority="3">
+     <settings>
+      <property name="Common::Show GCL Output" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Tick_Filter" idref="adtf.aadc.aadc_tickFilter" priority="5">
+     <settings />
+    </filter>
+    <filter alias="AADC_Calibration_XML" idref="adtf.aadc.aadc_calibrationXML" priority="6">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="7">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <subgraph alias="Base_Config" idref="Base_Config" priority="1" />
+    <subgraph alias="Turning_Config" idref="Turning_Config" priority="4" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML.output_value" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="PullOut_Filter.Speed" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="PullOut_Filter.Steering" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="PullOut_Filter.turn-right_Light" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalLeftEnabled" interface="" source="PullOut_Filter.turn-left_Light" />
+    <connection connection_priority="50" dest="Turning_Config.us_struct" interface="" source="Base_Config.Ultrasonic_Struct" />
+    <connection connection_priority="50" dest="Turning_Config.distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="Turning_Config.distance_right_wheel" interface="" source="Tick_Filter.distance_overall_right" />
+    <connection connection_priority="50" dest="Turning_Config.distance_left_wheel" interface="" source="Tick_Filter.distance_overall_left" />
+    <connection connection_priority="50" dest="PullOut_Filter.Distance_right_wheel" interface="" source="Tick_Filter.distance_overall_right" />
+    <connection connection_priority="50" dest="PullOut_Filter.Distance_left_wheel" interface="" source="Tick_Filter.distance_overall_left" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+    <connection connection_priority="50" dest="PullOut_Filter.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="Turning_Config.depth_image" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="PullOut_Filter.Distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="PullOut_Filter.us_struct" interface="" source="Base_Config.Ultrasonic_Struct" />
+    <filter alias="Test_PullOut_Filter" idref="adtf.aadc.aadc_testPullOutFilter" priority="8">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="PullOut_Filter" interface="" source="Test_PullOut_Filter.StartPullOut" />
+    <connection connection_priority="50" dest="PullOut_Filter" interface="" source="Test_PullOut_Filter.next_spot_free" />
+    <connection connection_priority="50" dest="Turning_Config.start_turning" interface="" source="PullOut_Filter.StartTurningStruct" />
+    <filter alias="Parallel_Parking_Filter" idref="adtf.aadc.aadc_ParallelParkingFilter" priority="9">
+     <settings />
+    </filter>
+    <filter alias="AADC_Visualization" idref="adtf.aadc.aadc_visualization" priority="10">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Left" interface="" source="Base_Config.Ultrasonic_Front_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Center_Left" interface="" source="Base_Config.Ultrasonic_Front_Center_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Center" interface="" source="Base_Config.Ultrasonic_Front_Center" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Center_Right" interface="" source="Base_Config.Ultrasonic_Front_Center_Right" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Right" interface="" source="Base_Config.Ultrasonic_Front_Right" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Side_Left" interface="" source="Base_Config.Ultrasonic_Side_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Side_Right" interface="" source="Base_Config.Ultrasonic_Side_Right" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Rear_Left" interface="" source="Base_Config.Ultrasonic_Rear_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Rear_Center" interface="" source="Base_Config.Ultrasonic_Rear_Center" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Rear_Right" interface="" source="Base_Config.Ultrasonic_Rear_Right" />
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="11" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="Turning_Config.steering" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalRightEnabled" interface="" source="Turning_Config.turn_right_light" />
+    <connection connection_priority="50" dest="Base_Config.turnSignalLeftEnabled" interface="" source="Turning_Config.turn_left_light" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="Turning_Config.velocity_turning" />
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="12">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display2" idref="adtf.visual.video_display" priority="13">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Video_Display2.gcl_input" interface="" source="Turning_Config.GCL" />
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="Video_Display2.input" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <filter alias="AADC_Bool_Value_Generator" idref="adtf.aadc.aadc_boolValueGenerator" priority="14">
+     <settings />
+    </filter>
+    <connection connection_priority="50" dest="Base_Config.headLightEnabled" interface="" source="AADC_Bool_Value_Generator.BoolValue" />
+    <filter alias="LaneTracking" idref="adtf.lane_tracking" priority="15">
+     <settings>
+      <property name="Common::Show Debug" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="LaneTracking.Video_Input" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="Video_Display.gcl_input" interface="" source="LaneTracking.GLC_Output" />
+   </graph>
+  </configuration>
+  <configuration description="" name="TestStopZebraStripes">
+   <graph>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="1">
+     <settings />
+    </filter>
+    <filter alias="Tick_Filter" idref="adtf.aadc.aadc_tickFilter" priority="2">
+     <settings />
+    </filter>
+    <filter alias="AADC_Calibration_XML" idref="adtf.aadc.aadc_calibrationXML" priority="3">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="4">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Visualization" idref="adtf.aadc.aadc_visualization" priority="5">
+     <settings />
+    </filter>
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="6" />
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="7">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display2" idref="adtf.visual.video_display" priority="8">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Bool_Value_Generator" idref="adtf.aadc.aadc_boolValueGenerator" priority="9">
+     <settings />
+    </filter>
+    <filter alias="LaneTracking" idref="adtf.lane_tracking" priority="11">
+     <settings>
+      <property name="Common::Show Debug" type="Bool" value="true" />
+      <property name="Common::Drive Time in milliseconds" type="Int" value="0" />
+      <property name="Common::Enable Lightbeam Trigger" type="Bool" value="true" />
+      <property name="LaneDetection::Far area::Far Line" type="Int" value="330" />
+      <property name="LaneDetection::Far area::Lane width max far" type="Int" value="380" />
+      <property name="LaneDetection::Far area::Lane width min far" type="Int" value="240" />
+      <property name="LaneDetection::Near area::Lane width max near" type="Int" value="530" />
+      <property name="LaneDetection::Near area::Lane width min near" type="Int" value="380" />
+      <property name="LaneDetection::Near area::Near Line" type="Int" value="400" />
+      <property name="LaneDetection::ThresholdValue" type="Int" value="20" />
+     </settings>
+    </filter>
+    <filter alias="Test_Stop_Filter" idref="adtf.aadc.aadc_testStopFilter" priority="12">
+     <settings>
+      <property name="Occasion" type="Int" value="1" />
+     </settings>
+    </filter>
+    <filter alias="Stop_Zebra_Stripes_Filter" idref="adtf.aadc.aadc_StopZebraStripesFilter" priority="13">
+     <settings />
+    </filter>
+    <subgraph alias="Base_Config" idref="Base_Config" priority="11" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML.output_value" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Left" interface="" source="Base_Config.Ultrasonic_Front_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Center_Left" interface="" source="Base_Config.Ultrasonic_Front_Center_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Center" interface="" source="Base_Config.Ultrasonic_Front_Center" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Center_Right" interface="" source="Base_Config.Ultrasonic_Front_Center_Right" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Right" interface="" source="Base_Config.Ultrasonic_Front_Right" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Side_Left" interface="" source="Base_Config.Ultrasonic_Side_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Side_Right" interface="" source="Base_Config.Ultrasonic_Side_Right" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Rear_Left" interface="" source="Base_Config.Ultrasonic_Rear_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Rear_Center" interface="" source="Base_Config.Ultrasonic_Rear_Center" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Rear_Right" interface="" source="Base_Config.Ultrasonic_Rear_Right" />
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="Video_Display2.input" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="LaneTracking.Video_Input" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="Stop_Zebra_Stripes_Filter.StopStruct" interface="" source="Test_Stop_Filter.StopStructParking" />
+    <connection connection_priority="50" dest="Stop_Zebra_Stripes_Filter.us_struct" interface="" source="Base_Config.Ultrasonic_Struct" />
+    <connection connection_priority="50" dest="Stop_Zebra_Stripes_Filter.Depthimage_Input" interface="" source="AADC_Xtion_Camera.Depth_Image" />
+    <connection connection_priority="50" dest="Video_Display.gcl_input" interface="" source="Stop_Zebra_Stripes_Filter.GLC_Output" />
+    <connection connection_priority="50" dest="LaneTracking.CurrentVelocity" interface="" source="Stop_Zebra_Stripes_Filter.VelocityLT" />
+    <connection connection_priority="50" dest="LaneTracking.start" interface="" source="AADC_Bool_Value_Generator.BoolValue" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="LaneTracking.Steering_Angle" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="LaneTracking.Acceleration" />
+    <connection connection_priority="50" dest="Stop_Zebra_Stripes_Filter.Distance_overall" interface="" source="Tick_Filter.distance_overall" />
+   </graph>
+  </configuration>
+  <configuration description="" name="TickFilterFehler">
+   <graph>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="1" />
+    <filter alias="Tick_Filter" idref="adtf.aadc.aadc_tickFilter" priority="2" />
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="3" />
+    <filter alias="TicTacTactic" idref="adtf.aadc.TicTacTactic" priority="5" />
+    <filter alias="AADC_Signal_Value_Generator" idref="adtf.aadc.aadc_signalValueGenerator" priority="6">
+     <settings>
+      <property name="Default Value 1" type="Float" value="70.0" />
+      <property name="Default Value 2" type="Float" value="90.0" />
+     </settings>
+    </filter>
+    <filter alias="TicTacTactic2" idref="adtf.aadc.TicTacTactic" priority="7" />
+    <filter alias="TicTacTactic3" idref="adtf.aadc.TicTacTactic" priority="8" />
+    <subgraph alias="Base_Config" idref="Base_Config" priority="4" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <connection connection_priority="50" dest="Tick_Filter.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+    <connection connection_priority="50" dest="TicTacTactic.1" interface="" source="Tick_Filter.car_speed" />
+    <connection connection_priority="50" dest="TicTacTactic.2" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="TicTacTactic.3" interface="" source="Tick_Filter.distance_overall_right" />
+    <connection connection_priority="50" dest="TicTacTactic.4" interface="" source="Tick_Filter.distance_overall_left" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Signal_Value_Generator.Value_1" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="AADC_Signal_Value_Generator.Value_2" />
+    <connection connection_priority="50" dest="TicTacTactic2.1" interface="" source="Tick_Filter.car_speed" />
+    <connection connection_priority="50" dest="TicTacTactic2.2" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="TicTacTactic2.3" interface="" source="Tick_Filter.distance_overall_right" />
+    <connection connection_priority="50" dest="TicTacTactic2.4" interface="" source="Tick_Filter.distance_overall_left" />
+    <connection connection_priority="50" dest="TicTacTactic3.1" interface="" source="Tick_Filter.car_speed" />
+    <connection connection_priority="50" dest="TicTacTactic3.2" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="TicTacTactic3.3" interface="" source="Tick_Filter.distance_overall_right" />
+    <connection connection_priority="50" dest="TicTacTactic3.4" interface="" source="Tick_Filter.distance_overall_left" />
+    <filter alias="Decision_Making" idref="adtf.decision_making" priority="9" />
+    <filter alias="EmergencySTOP" idref="adtf.example.Emergency_STOP" priority="10" />
+    <filter alias="AADC_Bool_Value_Generator" idref="adtf.aadc.aadc_boolValueGenerator" priority="11" />
+    <connection connection_priority="50" dest="Decision_Making.Distance_overall" interface="" source="Tick_Filter.distance_overall" />
+    <connection connection_priority="50" dest="Decision_Making.CarSpeed" interface="" source="Tick_Filter.car_speed" />
+    <connection connection_priority="50" dest="EmergencySTOP.CarSpeed" interface="" source="Tick_Filter.car_speed" />
+    <connection connection_priority="50" dest="EmergencySTOP.Status" interface="" source="AADC_Bool_Value_Generator.BoolValue" />
+    <connection connection_priority="50" dest="EmergencySTOP.us_struct" interface="" source="Base_Config.Ultrasonic_Struct" />
+   </graph>
+  </configuration>
+  <configuration description="" name="US_TEST">
+   <graph>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="2" />
+    <filter alias="AADC_Visualization" idref="adtf.aadc.aadc_visualization" priority="3" />
+    <subgraph alias="Base_Config" idref="Base_Config" priority="1" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Rear_Right" interface="" source="Base_Config.Ultrasonic_Rear_Right" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Rear_Center" interface="" source="Base_Config.Ultrasonic_Rear_Center" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Rear_Left" interface="" source="Base_Config.Ultrasonic_Rear_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Side_Right" interface="" source="Base_Config.Ultrasonic_Side_Right" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Side_Left" interface="" source="Base_Config.Ultrasonic_Side_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Right" interface="" source="Base_Config.Ultrasonic_Front_Right" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Center_Right" interface="" source="Base_Config.Ultrasonic_Front_Center_Right" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Center" interface="" source="Base_Config.Ultrasonic_Front_Center" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Center_Left" interface="" source="Base_Config.Ultrasonic_Front_Center_Left" />
+    <connection connection_priority="50" dest="AADC_Visualization.Ultrasonic_Front_Left" interface="" source="Base_Config.Ultrasonic_Front_Left" />
+    <filter alias="US_Sensor_Filter" idref="adtf._US_Ssensor_Filter" priority="4" />
+    <connection connection_priority="50" dest="US_Sensor_Filter.Sensor_middle_rear" interface="" source="Base_Config.Ultrasonic_Rear_Center" />
+    <connection connection_priority="50" dest="US_Sensor_Filter.Sensor_right" interface="" source="Base_Config.Ultrasonic_Side_Right" />
+    <connection connection_priority="50" dest="US_Sensor_Filter.Sensor_front_middle" interface="" source="Base_Config.Ultrasonic_Front_Center" />
+   </graph>
+  </configuration>
+  <configuration description="" name="OpenChallengeTest">
+   <graph>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="2" />
+    <subgraph alias="Base_Config" idref="Base_Config" priority="1" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <filter alias="CalcAreaFilter" idref="adtf.aadc.aadc_calcAreaFilter" priority="3" />
+    <filter alias="LineTracking" idref="adtf.line_tracking" priority="4">
+     <settings>
+      <property name="Common::Show Debug" type="Bool" value="true" />
+      <property name="LaneDetection::Near area::Near Line" type="Int" value="250" />
+      <property name="Common::Drive Time in milliseconds" type="Int" value="0" />
+      <property name="Common::Enable Lightbeam Trigger" type="Bool" value="true" />
+      <property name="LongitudinalControl::Max Acceleration" type="Float" value="0,8.0" />
+      <property name="LongitudinalControl::Min Acceleration" type="Float" value="0,8.0" />
+      <property name="LT::ImagecutHeightDownHough" type="Int" value="300" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="5">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <filter alias="Undistort" idref="adtf.example.undistort" priority="6" />
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="7">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Undistort.Image_Dist" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="LineTracking.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="Video_Display.gcl_input" interface="" source="LineTracking.GLC_Output" />
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="Undistort.Image_Undist" />
+    <filter alias="AADC_Calibration_XML" idref="adtf.aadc.aadc_calibrationXML" priority="8">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Calibration_XML2" idref="adtf.aadc.aadc_calibrationXML" priority="9">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../configuration_files/SteeringActuatorLaneTracking.xml" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="LineTracking.Acceleration" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML.output_value" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML2.input_value" interface="" source="LineTracking.Steering_Angle" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="AADC_Calibration_XML2.output_value" />
+    <filter alias="Harddisk_Recorder" idref="adtf.stg.harddisk_recorder" priority="10">
+     <settings>
+      <property name="filename" type="String" value="OCDriving.dat" />
+      <property name="start_on_startup" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Harddisk_Recorder.Image_Undist" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="Harddisk_Recorder.GLC_LiT" interface="" source="LineTracking.GLC_Output" />
+    <filter alias="Tick_Filter_OC" idref="adtf.aadc.aadc_tickFilterOC" priority="11" />
+    <filter alias="AADC_Bool_Value_Generator3" idref="adtf.aadc.aadc_boolValueGenerator" priority="12" />
+    <connection connection_priority="50" dest="Tick_Filter_OC.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <connection connection_priority="50" dest="Tick_Filter_OC.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+    <connection connection_priority="50" dest="CalcAreaFilter" interface="" source="Tick_Filter_OC.distance_overall" />
+    <connection connection_priority="50" dest="Tick_Filter_OC.Start" interface="" source="AADC_Bool_Value_Generator3.BoolValue" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="CalcAreaFilter.speed" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="CalcAreaFilter.steering" />
+    <filter alias="OC_Marker_Detection_Filter" idref="adtf.OCmarkerDetection" priority="12">
+     <settings>
+      <property name="Calibration File for used Camera" type="String" value="../../../configuration_files/xtionIntrinsicCalib.yml" />
+      <property name="Dictionary File For Markers" type="String" value="../../../configuration_files/OCroadsign.yml" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="CalcAreaFilter.Start" interface="" source="LineTracking.Start_Calc_Area" />
+    <connection connection_priority="50" dest="Tick_Filter_OC.Start" interface="" source="CalcAreaFilter.startTickFilter" />
+    <connection connection_priority="50" dest="OC_Marker_Detection_Filter.Video_RGB_input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="LineTracking.start" interface="" source="OC_Marker_Detection_Filter.Start_Driving" />
+    <connection connection_priority="50" dest="CalcAreaFilter.ShowResult" interface="" source="OC_Marker_Detection_Filter.Start_Scale" />
+    <connection connection_priority="50" dest="Tick_Filter_OC.Start" interface="" source="OC_Marker_Detection_Filter.Start_Driving" />
+    <connection connection_priority="50" dest="Tick_Filter_OC.Start" interface="" source="OC_Marker_Detection_Filter.Start_Scale" />
+    <connection connection_priority="50" dest="LineTracking.Distance_overall" interface="" source="Tick_Filter_OC.distance_overall" />
+   </graph>
+  </configuration>
+ </configurations>
+ <fileinfo adtfversion="2.13.1" configversion="1.3" />
+ <configuration_settings />
+ <plugins>
+  <plugin optional="true" url="../../../bin/Linux/gcc/$(BUILD_TYPE_2)/*.plb" />
+  <plugin optional="true" url="../../../bin/Windows/vc10/$(BUILD_TYPE_2)/*.plb" />
+ </plugins>
+ <adtf_include source="../../BaseConfig/IncludeConfig.xml" />
+</adtf:project>

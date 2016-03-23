@@ -1,0 +1,76 @@
+#ifndef _ROAD_SIGN_PREPROCESSING_H_
+#define _ROAD_SIGN_PREPROCESSING_H_
+
+#define OID_ADTF_ROAD_SIGN_PREPROCESSING "adtf.road_sign_preprocessing"
+
+#include <deque>
+#include <time.h>
+
+#define NUM_ROADSIGNS 12
+#define RANGE_DATASET 3
+
+
+//*************************************************************************************************
+class cRoadSignPreprocessing : public adtf::cFilter
+{
+    ADTF_FILTER(OID_ADTF_ROAD_SIGN_PREPROCESSING, "Roadsign Preprocessing Filter", adtf::OBJCAT_DataFilter);
+
+protected:
+    cInputPin    	m_iRoadSign;
+    cOutputPin    	m_oRoadSignFiltered;
+
+public:
+    cRoadSignPreprocessing(const tChar* __info);
+    virtual ~cRoadSignPreprocessing();
+
+	tResult addToBuffer(IMediaSample* pMediaSample);
+	tResult calcRoadSign();
+	tResult transmitRoadSign(tInt16 sign_id);
+	tInt16 getListIndexOfSign(tInt16 signId);
+	tInt16 getSignByIndex(tInt16 signId);
+
+private:
+	// RoadSignInput
+	cObjectPtr<IMediaTypeDescription> m_pRoadSignInput;
+	tBufferID m_szIDSignIdentifierInput;
+	tBufferID m_szIDSignSizeInput;
+	tBufferID m_szIDSignTranslation1Input;
+	tBufferID m_szIDSignTranslation2Input;
+	tBufferID m_szIDSignTranslation3Input;
+	tBufferID m_szIDSignRotation1Input;
+	tBufferID m_szIDSignRotation2Input;
+	tBufferID m_szIDSignRotation3Input;
+	tBool m_bSignInputSet;
+
+	// RoadSignOutput
+	cObjectPtr<IMediaTypeDescription> m_pRoadSignOutput;
+	tBufferID m_szIDSignIdentifierOutput;
+	tBufferID m_szIDSignSizeOutput;
+	tBool m_bSignOutputSet;
+	
+	std::deque<tInt16> m_roadSignBuffer;
+
+	// Remeber last size of each found roadSign
+	tFloat32 	sizeList[NUM_ROADSIGNS];
+
+	// Last time of incoming RoadSign in seconds
+	//double 		last_time;
+	tUInt32 	last_time;
+
+	// Working state of filtering
+	tBool 		working;
+
+protected:
+    tResult Init(tInitStage eStage, __exception);
+    tResult Shutdown(tInitStage eStage, __exception);
+
+    // implements IPinEventSink
+    tResult OnPinEvent(IPin* pSource,
+                       tInt nEventCode,
+                       tInt nParam1,
+                       tInt nParam2,
+                       IMediaSample* pMediaSample);
+};
+
+//*************************************************************************************************
+#endif // _ROAD_SIGN_PREPROCESSING_H_

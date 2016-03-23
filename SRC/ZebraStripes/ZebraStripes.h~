@@ -1,0 +1,174 @@
+#ifndef _ZebraStripes_FILTER_HEADER_
+#define _ZebraStripes_FILTER_HEADER_
+
+#define OID_ADTF_ZebraStripes  "adtf.aadc.ZebraStripes"
+#define LT_POINTS_ARRAY_SIZE 640
+
+class cZebraStripes : public adtf::cFilter,
+                      public adtf::ISignalProvider
+{
+    
+    ADTF_DECLARE_FILTER_VERSION(OID_ADTF_ZebraStripes, "ZebraStripes", OBJCAT_Tool, "ZebraStripes", 1, 0, 0, "BFFT GmbH");    
+    
+protected:
+    //Eingang für RGB Bild
+    cVideoPin           m_iVideoInputPin;
+	cVideoPin			m_iDepthimagePin;
+    cInputPin           m_iStart; 
+	cInputPin  			m_iDistance;
+        
+    cOutputPin          m_oGCLOutput;
+	cOutputPin			m_oDistanceOutput;
+
+
+public:
+
+
+                
+    cZebraStripes(const tChar*);
+    virtual ~cZebraStripes();
+
+    // implements cFilter
+    tResult Init(tInitStage eStage, __exception=NULL);
+    tResult Shutdown(tInitStage eStage, ucom::IException** __exception_ptr=NULL);
+    tResult OnPinEvent(IPin* pSource, tInt nEventCode, tInt nParam1, tInt nParam2, IMediaSample* pMediaSample);
+    tResult Start(__exception = NULL);
+    tResult Stop(__exception = NULL);
+    tResult PropertyChanged(const char* strProperty);
+
+public: // implements ISignalProvider
+    virtual tResult GetSignalValue(tSignalID nSignalID, tSignalValue* pValue);
+    virtual tResult ActivateSignalEvents(tSignalID nSignalID, tTimeStamp nUpdateRate = 0);
+    virtual tResult DeactivateSignalEvents(tSignalID nSignalID);
+
+public: // implements IObject
+    tResult GetInterface(const tChar* idInterface, tVoid** ppvObject);
+    tUInt Ref();
+    tUInt Unref();
+    tVoid Destroy();
+
+private: // private methods
+	tResult SearchCorners();
+    tResult ProcessInputRGB(IMediaSample* pSample, tTimeStamp);
+    tResult ProcessInputDepth(IMediaSample* pSample, tTimeStamp);
+	tResult ProcessSpeed(IMediaSample* pMediaSample);
+    tResult ProcessFound();
+    tResult ProcessOutput();
+    tResult ReadProperties(const tChar* strPropertyName = NULL);
+    tResult CreateAndTransmitGCL();
+	tResult TransmitZebraSpot(float spot1,float spot2);
+
+
+protected:
+    tResult Run(tInt nActivationCode, const tVoid* pvUserData, tInt szUserDataSize, ucom::IException** __exception_ptr = NULL);
+public:
+
+
+private:
+    //für Search
+    tUInt8      m_ui8PointsCount;
+
+	// for stop criteria
+	tUInt8		m_iframeCounter;
+
+
+    // offset of the camera to the mid of the vehicle
+    tFloat64    m_f64CamOffset;
+    
+
+	//decide which videoinput we use
+	tBool		RGBreceived;
+
+    // active flag to enable driving
+    tBool       m_bActive;
+
+	// activate flag to activate distance measurement
+	tBool		m_filterActive;
+        
+
+
+	// line detection
+	cv::Mat		matCutHough;
+	cv::Mat		m_matCanny;
+	vector<Vec2f> 	m_lines;
+  	cv::Mat		m_matImageDepth;
+	Point2f m_representerHGR;
+	Point2f m_representerHGL;
+	vector<Point2i> m_intersecPointsR;
+	vector<Point2i> m_intersecPointsL;
+	vector<float> m_ZebraStripes;
+
+	// for tick filter/ driven distance
+	float m_fDistance;
+	float m_distanceOffset;
+	std::deque<float> m_bufZebraNear;
+	std::deque<float> m_bufZebraFar;
+
+
+	// ZebraStripesLotOutput
+	cObjectPtr<IMediaTypeDescription> m_pDistance;
+	tBufferID m_sznearDistance;
+	tBufferID m_szfarDistance;
+	tBufferID m_szIDTimestampOutput;
+	tBool m_ZebraStripesOutputSet;
+
+	// StartBoolInput
+	cObjectPtr<IMediaTypeDescription> m_pStartBoolInput;
+	tBufferID m_szIDValueStartBoolInput; 
+	tBufferID m_szIDTimestampStartBoolInput;
+	tBool m_bStartBoolInput;
+
+	// Distance Input
+	cObjectPtr<IMediaTypeDescription>	m_pDistanceInput;
+	tBufferID m_szIDDistanceInput;
+	tBufferID m_szIDTimestampDistanceInput;
+	tBool m_DistanceInputSet;
+ 	
+
+    // flag to check the first frame
+    bool        m_bFirstFrame;
+    bool        m_bFirstFrameDepthimage;
+    // image counter 
+    tUInt8      m_ui8Imagecount;
+    // arduino timestamp value
+    tUInt32     m_tsArduinoTime;
+    // bitmap format of input pin
+    tBitmapFormat m_sInputFormatDepthimage;
+    tBitmapFormat m_sInputFormat;
+        
+    //Properties:
+    
+	tInt        m_nThresholdValueCanny;
+    tInt        m_nThresholdValueHough;
+
+
+//Imagecut for Zebradetectiondetection
+	tInt		m_nImagecutWidthLeft;
+	tInt		m_nImagecutWidthRight;
+	tInt		m_nImagecutHeightUp;
+	tInt		m_nImagecutHeightDown;
+
+        
+    tBool       m_bShowDebug;
+
+        
+    // Critical Sections
+    cCriticalSection    m_oTransmitSteerCritSection;
+    cCriticalSection    m_oTransmitAccelCritSection;
+    cCriticalSection    m_oTransmitLightCritSection;
+    cCriticalSection    m_oRunCritSection;
+
+    // members for signal registry
+    typedef std::set<tSignalID> tActiveSignals;
+
+    ucom::cObjectPtr<ISignalRegistryExtended> m_pISignalRegistry;
+    cKernelMutex                              m_oLock;
+    tActiveSignals                            m_oActive;
+
+    // caching the error values for signal registry
+    tFloat64            m_f64PT1ScaledError;
+    tInt16              m_i16Error;
+        
+};
+
+#endif 

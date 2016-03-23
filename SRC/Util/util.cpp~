@@ -1,0 +1,18 @@
+/*
+ * Date 25.11.12
+ */
+
+#include "util.h"
+#include "../../include/intrinsic_data.h"
+#include "../../include/camera_angle.h"
+
+util::util(){
+	// Nothing to do here
+}
+
+Point3f util::ComputeWorldCoordinate(float point_x, float point_y, float depth_value){
+			Point3f point;
+			point.x 	= (point_x - c_x) * depth_value / (f_x*10);
+			point.y 	= (point_y - c_y) * depth_value / (f_y*10);
+			point.z 	= depth_value * 0.1;
+}

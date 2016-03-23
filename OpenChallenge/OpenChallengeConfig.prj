@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="iso-8859-1" standalone="no"?>
+<project name="OpenChallengeConfig" version="2.0">
+ <folder desc="Configuration Files" expand="" name="Configuration" path="config" type="config">
+  <file name="System Configuration" path=".\config\system.xml" type="config/sys" />
+ </folder>
+ <folder active="true" desc="Tasks" expand="*.dat" name="Captured Files" path="files" type="capture" />
+ <file name="OCDriving_008.dat" path="./config/OCDriving_008.dat" type="capture/datfile" />
+ <file name="OCDriving_009.dat" path="./config/OCDriving_009.dat" type="capture/datfile" />
+ <file name="OCDriving_013.dat" path="./config/OCDriving_013.dat" type="capture/datfile" />
+ <file name="OCDriving_003.dat" path="./config/OCDriving_003.dat" type="capture/datfile" />
+ <file name="OCDriving_007.dat" path="./config/OCDriving_007.dat" type="capture/datfile" />
+ <file name="OCDriving_008.dat" path="./config/OCDriving_008.dat" type="capture/datfile" />
+ <file name="OCDriving_010.dat" path="./config/OCDriving_010.dat" type="capture/datfile" />
+ <file name="OCDriving.dat" path="./config/OCDriving.dat" type="capture/datfile" />
+ <file name="OCDriving.dat" path="./config/OCDriving.dat" type="capture/datfile" />
+ <file name="OCDriving_006.dat" path="./config/OCDriving_006.dat" type="capture/datfile" />
+ <file name="OCDriving_008.dat" path="./config/OCDriving_008.dat" type="capture/datfile" />
+ <file name="OCDriving_009.dat" path="./config/OCDriving_009.dat" type="capture/datfile" />
+</project>

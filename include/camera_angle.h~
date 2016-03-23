@@ -1,0 +1,9 @@
+#ifndef camera_angle_h
+#define camera_angle_h
+
+#include <cmath>
+
+const float camera_angle=2.928997; //3.76; // in [deg]
+const float camera_angle_rad=((camera_angle) * M_PI / 180); // in [rad]
+
+#endif

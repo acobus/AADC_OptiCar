@@ -1,0 +1,19 @@
+#ifndef _UTIL_
+#define _UTIL_
+
+#include "stdafx.h"
+#include "../../include/camera_angle.h"
+
+namespace Util{
+
+	Point3f ComputeWorldCoordinate(float pPoint_x, float pPoint_y, float pDepthValue, int ImagecutHeightUp, int ImagecutWidthLeft);
+
+	void CalculateCameraAngle(float pDepthValueMid);
+
+	static float pitch;
+
+//	float camera_angle_rad= camera_angle / 360 * 2 * M_PI;
+	//extern float camera_angle_rad;//!?!?! 	= camera_angle / 360 * 2 * M_PI;
+};
+
+#endif //Util	

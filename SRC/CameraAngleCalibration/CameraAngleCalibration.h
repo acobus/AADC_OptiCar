@@ -1,0 +1,68 @@
+/*
+ * Date 24.11.15
+ */
+
+#ifndef _CAMERAANGLECALIBRATION_H_
+#define _CAMERAANGLECALIBRATION_H_
+
+#define OID_ADTF_CAMERAANGLECALIBRATION "adtf.CameraAngleCalibration"
+
+
+//*************************************************************************************************
+class cCameraAngleCalibration : public adtf::cFilter
+{
+	ADTF_DECLARE_FILTER_VERSION(OID_ADTF_CAMERAANGLECALIBRATION, "CameraAngleCalibration", OBJCAT_DataFilter, "CameraAngleCalibration", 1, 0, 0, "BFFT GmbH"); 
+
+protected:
+    cVideoPin    	m_iRGBImagePin;
+	cVideoPin 		m_iDepthimagePin;
+	cInputPin 		m_iStart;
+    cVideoPin    	m_oRGBImagePin;
+    cOutputPin      m_oGCLOutput;
+
+public:
+    cCameraAngleCalibration(const tChar* __info);
+    virtual ~cCameraAngleCalibration();
+
+	tResult GetRGBImage(IMediaSample* pMediaSample);
+	tResult ProcessInputDepth(IMediaSample* pSample);
+	tResult SendRGBImage(Mat image);
+	tResult UpdateImageFormat(const tBitmapFormat* pFormat);
+	void fixVideoFormat(Mat image);
+    tResult CreateAndTransmitGCL();
+	tResult work(IMediaSample* pMediaSample);
+
+
+protected:
+    tResult Init(tInitStage eStage, __exception);
+    tResult Shutdown(tInitStage eStage, __exception);
+
+    // implements IPinEventSink
+    tResult OnPinEvent(IPin* pSource,
+                       tInt nEventCode,
+                       tInt nParam1,
+                       tInt nParam2,
+                       IMediaSample* pMediaSample);
+private:
+	
+	// Process Start Pin (Input)
+    cObjectPtr<IMediaTypeDescription> m_pStartInput;
+	tBufferID m_szIDBoolValueStartInput;
+	tBool m_startInputSet;
+
+	tBool m_CalibrationActive;
+	int m_CalibrationCounter;
+	float m_angle;
+
+    // bitmap format of input pin
+    tBitmapFormat m_sInputFormat;
+	tBitmapFormat m_sInputFormatDepthimage;
+
+    // flag to check the first frame
+    tBool       m_bFirstFrameRGB;
+	tBool 		m_bFirstFrameDepthimage;
+
+};
+
+//*************************************************************************************************
+#endif // _CAMERAANGLECALIBRATION_H_

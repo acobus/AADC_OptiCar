@@ -1,0 +1,8 @@
+#define US_FRONT_LEFT 0
+#define US_FRONT_CENTER_LEFT 1
+#define US_FRONT_CENTER 2
+#define US_FRONT_CENTER_RIGHT 3
+#define US_FRONT_RIGHT 4
+#define US_REAR_LEFT 5
+#define US_REAR_CENTER 6
+#define US_REAR_RIGHT

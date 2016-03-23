@@ -1,0 +1,664 @@
+/*
+ * Date 10.12.2015
+ */ 
+
+#include <math.h>
+#include "stdafx.h"
+#include "TurningFilter.h"
+#include <fstream>
+
+
+
+ADTF_FILTER_PLUGIN("TurningFilter", __guid, TurningFilter);
+
+
+TurningFilter::TurningFilter(const tChar* __info) : m_turnLeftON(false), m_turnRightON(false), m_finishTurning(false), m_isTurning(false), m_switchingPoint(1000.0)
+{
+	SetPropertyInt("Actuator Update Rate [Hz]",30);
+	SetPropertyStr("Actuator Update Rate [Hz]" NSSUBPROP_DESCRIPTION, "Defines how much updates for steering and speed controller are sent in one second (Range: 0 to 100 Hz)"); 
+	SetPropertyInt("Actuator Update Rate [Hz]" NSSUBPROP_MIN, 0); 
+	SetPropertyInt("Actuator Update Rate [Hz]" NSSUBPROP_MAX, 100);
+
+	SetPropertyFloat("Default Speed",0);
+	SetPropertyStr("Default Speed" NSSUBPROP_DESCRIPTION, "Defines the default speed [m/s] which is transmitted when nothing is read from the list");
+	SetPropertyBool("Default Speed" NSSUBPROP_ISCHANGEABLE, tTrue); 
+
+	SetPropertyFloat("Default Steering",90);
+	SetPropertyStr("Default Steering" NSSUBPROP_DESCRIPTION, "Defines the default steering [servo angle] which is transmitted when nothing is read from the list");
+	SetPropertyFloat("Default Steering" NSSUBPROP_MIN, 60); 
+	SetPropertyFloat("Default Steering" NSSUBPROP_MAX, 120);
+	SetPropertyBool("Default Steering" NSSUBPROP_ISCHANGEABLE, tTrue); 
+
+	SetPropertyFloat("Time Stretch Factor",1.52);
+	SetPropertyStr("Time Stretch Factor" NSSUBPROP_DESCRIPTION, "Time Stretch Factor");
+	SetPropertyFloat("Time Stretch Factor" NSSUBPROP_MIN, 0.0);
+	SetPropertyBool("Time Stretch Factor" NSSUBPROP_ISCHANGEABLE, tTrue);
+
+
+	turningModeLookup[0][0][0] = 1;
+	turningModeLookup[0][1][0] = 2;
+	turningModeLookup[0][2][0] = 3;
+	turningModeLookup[0][0][1] = 4;
+	turningModeLookup[0][1][1] = 5;
+	turningModeLookup[0][2][1] = 6;
+
+	turningModeLookup[1][0][0] = 0;
+	turningModeLookup[1][1][0] = 7;
+	turningModeLookup[1][2][0] = 8;
+	turningModeLookup[1][0][1] = 0;
+	turningModeLookup[1][1][1] = 5;
+	turningModeLookup[1][2][1] = 6;
+
+	turningModeLookup[2][0][0] = 9;
+	turningModeLookup[2][1][0] = 0;
+	turningModeLookup[2][2][0] = 3;
+	turningModeLookup[2][0][1] = 10;
+	turningModeLookup[2][1][1] = 0;
+	turningModeLookup[2][2][1] = 6;
+
+	turningModeLookup[3][0][0] = 11;
+	turningModeLookup[3][1][0] = 12;
+	turningModeLookup[3][2][0] = 0;
+	turningModeLookup[3][0][1] = 4;
+	turningModeLookup[3][1][1] = 5;
+	turningModeLookup[3][2][1] = 0;
+
+}
+
+TurningFilter::~TurningFilter()
+{
+}
+
+
+tResult TurningFilter::Init(tInitStage eStage, __exception)
+{
+    RETURN_IF_FAILED(cFilter::Init(eStage, __exception_ptr));
+
+    // pins need to be created at StageFirst
+    if (eStage == StageFirst)    {
+
+        //get the description manager for this filter
+        cObjectPtr<IMediaDescriptionManager> pDescManager;
+        RETURN_IF_FAILED(_runtime->GetObject(OID_ADTF_MEDIA_DESCRIPTION_MANAGER,IID_ADTF_MEDIA_DESCRIPTION_MANAGER,(tVoid**)&pDescManager,__exception_ptr));
+
+        //get description for sensor data pins
+        tChar const * strDescSignalValue = pDescManager->GetMediaDescription("tSignalValue");	
+        RETURN_IF_POINTER_NULL(strDescSignalValue);	
+        //get mediatype for ultrasonic sensor data pins
+        cObjectPtr<IMediaType> pTypeSignalValue = new cMediaType(0, 0, 0, "tSignalValue", strDescSignalValue, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+
+		// Get description for bool values
+		tChar const * strDescBoolSignalValue = pDescManager->GetMediaDescription("tBoolSignalValue");	
+		RETURN_IF_POINTER_NULL(strDescBoolSignalValue);	
+		cObjectPtr<IMediaType> pTypeBoolSignalValue = new cMediaType(0, 0, 0, "tBoolSignalValue", strDescBoolSignalValue, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+
+		// Media Description Turning
+		tChar const * TurningDesc = pDescManager->GetMediaDescription("tTurningStruct");
+		RETURN_IF_POINTER_NULL(TurningDesc);
+		cObjectPtr<IMediaType> pTypeTurningDesc = new cMediaType(0, 0, 0, "tTurningStruct", TurningDesc, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+
+		// Media Description Sensors
+		tChar const * UltraSonicDesc = pDescManager->GetMediaDescription("tUltrasonicStruct");
+		RETURN_IF_POINTER_NULL(UltraSonicDesc);
+		cObjectPtr<IMediaType> pTypeUltraSonicDesc = new cMediaType(0, 0, 0, "tUltrasonicStruct", UltraSonicDesc, IMediaDescription::MDF_DDL_DEFAULT_VERSION);
+		
+
+        //get mediatype description for output data type
+        RETURN_IF_FAILED(pTypeSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pDescriptionOutput));
+        RETURN_IF_FAILED(pTypeSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pDescriptionOutput2));
+
+		RETURN_IF_FAILED(pTypeBoolSignalValue->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pDescriptionBool));
+		RETURN_IF_FAILED(pTypeTurningDesc->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pStartTurningInput)); 
+		RETURN_IF_FAILED(pTypeUltraSonicDesc->GetInterface(IID_ADTF_MEDIA_TYPE_DESCRIPTION, (tVoid**)&m_pUltraSonicInput)); 
+
+		//create input pin for starting
+    	RETURN_IF_FAILED(m_iStartTurning.Create("StartTurning", pTypeTurningDesc, static_cast<IPinEventSink*> (this)));
+    	RETURN_IF_FAILED(RegisterPin(&m_iStartTurning));
+
+		//create input pin for US
+    	RETURN_IF_FAILED(m_iUltraSonic.Create("us_struct", pTypeUltraSonicDesc, static_cast<IPinEventSink*> (this)));
+    	RETURN_IF_FAILED(RegisterPin(&m_iUltraSonic));
+
+        //create output pin for speed output data
+        RETURN_IF_FAILED(m_oSpeed.Create("Speed", pTypeSignalValue, static_cast<IPinEventSink*> (this)));	
+        RETURN_IF_FAILED(RegisterPin(&m_oSpeed));
+
+        //create output pin for steering output data
+        RETURN_IF_FAILED(m_oSteering.Create("Steering", pTypeSignalValue, static_cast<IPinEventSink*> (this)));	
+        RETURN_IF_FAILED(RegisterPin(&m_oSteering));	
+
+		//create output pin for turn-right light output data
+        RETURN_IF_FAILED(m_oTurnRight.Create("turn-right_Light", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));	
+        RETURN_IF_FAILED(RegisterPin(&m_oTurnRight));
+
+		//create output pin for turn-left light output data
+        RETURN_IF_FAILED(m_oTurnLeft.Create("turn-left_Light", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));	
+        RETURN_IF_FAILED(RegisterPin(&m_oTurnLeft));
+
+		//create output pin for finish parking output data
+        RETURN_IF_FAILED(m_oFinishTurning.Create("finish_Parking", pTypeBoolSignalValue, static_cast<IPinEventSink*> (this)));	
+        RETURN_IF_FAILED(RegisterPin(&m_oFinishTurning));
+    	
+        RETURN_NOERROR;
+    }
+    else if(eStage == StageNormal)
+    {
+        m_f32DefaultValue1 = static_cast<tFloat32>(GetPropertyFloat("Default Speed"));
+        m_f32DefaultValue2 = static_cast<tFloat32>(GetPropertyFloat("Default Steering"));
+		m_fTSF = static_cast<tFloat32>(GetPropertyFloat("Time Stretch Factor"));
+    }
+    else if(eStage == StageGraphReady)
+    {
+        // no ids were set so far
+        m_bIDsOutputSet = tFalse;
+        m_bIDsOutput2Set = tFalse;
+		m_bIDsBoolValueOutput = tFalse;
+		m_bIDsUltraSonicSet = tFalse;
+		m_ultraSonicReceived = tFalse;
+		m_turningMode = -1;
+		m_bIDsStartTurningSet = tFalse;
+		m_turningManeuvre = NOT_SET;
+
+		
+    }
+    RETURN_NOERROR;
+}
+
+
+tResult TurningFilter::PropertyChanged(const tChar* strName)
+{
+    //read from property if it was changed
+    if (cString::IsEqual("Default Speed", strName))
+    {
+        m_f32DefaultValue1 = static_cast<tFloat32>(GetPropertyFloat("Default Speed"));
+    }
+    else if (cString::IsEqual("Default Steering", strName))
+    {
+        m_f32DefaultValue2 = static_cast<tFloat32>(GetPropertyFloat("Default Steering"));
+    }
+	else if (cString::IsEqual("Time Stretch Factor", strName))
+    {
+        m_fTSF = static_cast<tFloat32>(GetPropertyFloat("Time Stretch Factor"));
+		LOG_INFO(cString::Format("Turn: Stretch-Faktor %f",m_fTSF));
+    }
+
+    RETURN_NOERROR;
+}
+tResult TurningFilter::Start(__exception)
+{
+    RETURN_IF_FAILED(cFilter::Start(__exception_ptr));
+
+    //create the timer for the transmitting actuator values
+    tTimeStamp tmPeriod = tTimeStamp(1/float(GetPropertyInt("Actuator Update Rate [Hz]"))*1000000);
+    m_hTimerOutput = _kernel->TimerCreate(tmPeriod, GetPropertyInt("Actuator Startup Time Delay [sec]")*1000000, static_cast<IRunnable*>(this),
+        NULL, &m_hTimerOutput, 0, 0, adtf_util::cString::Format("%s.timer", OIGetInstanceName()));
+
+    RETURN_NOERROR;
+}
+
+tResult TurningFilter::Run(tInt nActivationCode, const tVoid* pvUserData, tInt szUserDataSize, ucom::IException** __exception_ptr/* =NULL */)
+{
+	if (!m_isTurning)
+	{	
+		return cFilter::Run(nActivationCode, pvUserData, szUserDataSize, __exception_ptr);	
+	}
+    if (nActivationCode == IRunnable::RUN_TIMER)
+    {        
+        // actuator timer was called, time to transmit actuator samples
+        if (pvUserData==&m_hTimerOutput)
+        {
+
+            //create new media sample for steering controller	
+            {                
+                cObjectPtr<IMediaSample> pMediaSampleValue1;	
+                RETURN_IF_FAILED(AllocMediaSample((tVoid**)&pMediaSampleValue1));
+
+                //allocate memory with the size given by the descriptor	
+                cObjectPtr<IMediaSerializer> pSerializer1;	
+                m_pDescriptionOutput->GetMediaSampleSerializer(&pSerializer1);
+                tInt nSize = pSerializer1->GetDeserializedSize();	
+                RETURN_IF_FAILED(pMediaSampleValue1->AllocBuffer(nSize));	
+                tFloat32 value1 = getCurrentValue(_clock->GetStreamTime(),1);
+                {   // focus for sample write lock	
+                    //write date to the media sample with the coder of the descriptor
+                    __adtf_sample_write_lock_mediadescription(m_pDescriptionOutput,pMediaSampleValue1,pCoder);
+                    // get the IDs for the items in the media sample 
+                    if(!m_bIDsOutputSet)
+                    {
+                        pCoder->GetID("f32Value", m_szIDOutputF32Value);
+                        pCoder->GetID("ui32ArduinoTimestamp", m_szIDOutputArduinoTimestamp);
+                        m_bIDsOutputSet = tTrue;
+                    }   
+                    pCoder->Set(m_szIDOutputF32Value, (tVoid*)&value1);
+                }
+
+                //transmit media sample over output pin
+
+                RETURN_IF_FAILED(pMediaSampleValue1->SetTime(_clock->GetStreamTime()));
+
+
+                RETURN_IF_FAILED(m_oSpeed.Transmit(pMediaSampleValue1));
+            }
+            //create new media sample for speed controller	
+            {                
+                cObjectPtr<IMediaSample> pMediaSampleValue2;	
+                RETURN_IF_FAILED(AllocMediaSample((tVoid**)&pMediaSampleValue2));
+
+                //allocate memory with the size given by the descriptor	
+                cObjectPtr<IMediaSerializer> pSerializerSpeed;	
+                m_pDescriptionOutput2->GetMediaSampleSerializer(&pSerializerSpeed);
+                tInt nSizeSpeed = pSerializerSpeed->GetDeserializedSize();	
+                RETURN_IF_FAILED(pMediaSampleValue2->AllocBuffer(nSizeSpeed));	
+
+                tFloat32 value2 = getCurrentValue(_clock->GetStreamTime(),2);
+
+                {   // focus for sample write lock	
+                    //write date to the media sample with the coder of the descriptor
+                    __adtf_sample_write_lock_mediadescription(m_pDescriptionOutput2,pMediaSampleValue2,pCoder2);
+
+                    // get the IDs for the items in the media sample 
+                    if(!m_bIDsOutput2Set)
+                    {
+                        pCoder2->GetID("f32Value", m_szIDOutput2F32Value);
+                        pCoder2->GetID("ui32ArduinoTimestamp", m_szIDOutput2ArduinoTimestamp);
+                        m_bIDsOutput2Set = tTrue;
+                    }      
+
+                    pCoder2->Set(m_szIDOutput2F32Value, (tVoid*)&value2);
+                }
+
+                //transmit media sample over output pin	
+                RETURN_IF_FAILED(pMediaSampleValue2->SetTime(_clock->GetStreamTime()));
+                RETURN_IF_FAILED(m_oSteering.Transmit(pMediaSampleValue2));
+            }
+        }
+
+    }
+    return cFilter::Run(nActivationCode, pvUserData, szUserDataSize, __exception_ptr);
+}
+
+
+tResult TurningFilter::Stop(__exception)
+{       
+    if (m_hTimerOutput) 
+    {
+        _kernel->TimerDestroy(m_hTimerOutput);
+        m_hTimerOutput = NULL;
+    }
+
+    RETURN_IF_FAILED(cFilter::Stop(__exception_ptr));
+
+    RETURN_NOERROR;
+}
+
+tResult TurningFilter::Shutdown(tInitStage eStage, __exception)
+{ 
+    return cFilter::Shutdown(eStage, __exception_ptr);
+}
+
+
+void TurningFilter::turning(tInt32 mode)
+{
+// losfahren
+	if (!m_isTurning) {
+		m_finishTurning = false;
+    	m_f32StartTimeStamp = _clock->GetStreamTime();
+	}
+	m_turningMode = mode;
+	m_isTurning = tTrue;
+
+
+}
+
+tFloat32 TurningFilter::getDefaultValue(tInt8 i8ValueID)
+{
+    switch (i8ValueID)
+    {
+    case 1:
+        return m_f32DefaultValue1;
+        break;
+    case 2:
+        return m_f32DefaultValue2;
+        break;
+    default:                
+        return m_f32DefaultValue1;
+        break;
+    }
+}
+
+tFloat32 TurningFilter::getCurrentValue(tFloat32 fTime, tInt8 i8ValueID)
+{
+
+	// list empty or output disabled, return default
+    if (m_isTurning == tFalse) {
+		return getDefaultValue(i8ValueID);
+	}
+
+	if (m_turningManeuvre == TURN_LEFT) {
+		// turn on turnLeft-light
+		if (!m_turnLeftON) {
+			TransmitBoolValue(&m_oTurnLeft, true);
+			m_turnLeftON = true;
+		}
+	} else if (m_turningManeuvre == TURN_RIGHT) {
+		// turn on turnRight-light
+		if (!m_turnRightON) {
+			TransmitBoolValue(&m_oTurnRight, true);
+			m_turnRightON = true;
+		}
+	}
+
+    if (m_turningManeuvre == NOT_SET) {
+		return getDefaultValue(i8ValueID);
+	}
+
+	//get time difference in seconds
+    fTime = (_clock->GetStreamTime()-m_f32StartTimeStamp)/1000000;
+
+	m_switchingPoint = 1.0;
+    switch (i8ValueID)
+    {
+	case 1: {
+
+		if (m_turningManeuvre == TURN_LEFT) {
+			if (fTime >= 0 && fTime <= 0.6) {			
+				return 2.0;
+			} else if (fTime > 0.6 && fTime <= 0.7) {
+				return 0.5;
+			}else if (fTime > 0.7 && fTime <= 2.3) {
+				return 1.5;
+			} else  {
+				return 0.0;
+			}
+
+		} else if (m_turningManeuvre == STRAIGHT_ON) {
+
+			if (fTime >= 0 && fTime <= 1.55) {			
+				return 2.0;
+			} else  {
+				return 0.0;
+			}
+
+		} else if (m_turningManeuvre == TURN_RIGHT) {
+
+			if (fTime >= 0 && fTime <= 2.1) {			
+				return 1.5;
+			} else  {
+				return 0.0;
+			}
+		}
+
+        break;}
+
+
+    case 2: {
+
+		if (m_turningManeuvre == TURN_LEFT) {
+			if (fTime > 0.7 && fTime <= 2.3) { //vorher auch 90.0  -> else-Zweig
+				return 60.0;
+			} else  {
+				return 90.0;
+			}
+
+		} else if (m_turningManeuvre == STRAIGHT_ON) {
+				return 90.0;
+
+
+		} else if (m_turningManeuvre == TURN_RIGHT) {
+
+			if (fTime >= 0.1 && fTime <= 2.1) {	//vorher auch 90.0	-> else-Zweig
+				return 120.0;
+			} else  {
+				return 90.0;
+			}
+		}
+
+        break;}
+    }
+
+
+/*switch (i8ValueID)   // Abbiegen, falls danach Kurve
+    {
+	case 1: {
+
+		if (m_turningManeuvre == TURN_LEFT) {
+			if (fTime >= 0 && fTime <= 0.6) {			
+				return 2.0;
+			} else if (fTime > 0.6 && fTime <= 0.7) {
+				return 0.5;
+			}else if (fTime > 0.7 && fTime <= 2) {
+				return 1.5;
+			} else  {
+				return 0.0;
+			}
+
+		} else if (m_turningManeuvre == STRAIGHT_ON) {
+
+			if (fTime >= 0 && fTime <= 1.2) {			
+				return 2.0;
+			} else  {
+				return 0.0;
+			}
+
+		} else if (m_turningManeuvre == TURN_RIGHT) {
+
+			if (fTime >= 0 && fTime <= 1.8) {			
+				return 1.5;
+			} else  {
+				return 0.0;
+			}
+		}
+
+        break;}
+
+
+    case 2: {
+
+		if (m_turningManeuvre == TURN_LEFT) {
+			if (fTime > 0.7 && fTime <= 2) { //vorher auch 90.0  -> else-Zweig
+				return 60.0;
+			} else  {
+				return 90.0;
+			}
+
+		} else if (m_turningManeuvre == STRAIGHT_ON) {
+				return 90.0;
+
+
+		} else if (m_turningManeuvre == TURN_RIGHT) {
+
+			if (fTime >= 0.1 && fTime <= 1.8) {	//vorher auch 90.0	-> else-Zweig
+				return 120.0;
+			} else  {
+				return 90.0;
+			}
+		}
+
+        break;}
+    }*/
+
+    //should never happen (only if valueID is not 1 or 2:
+    return m_f32DefaultValue1;
+}
+
+tResult TurningFilter::OnPinEvent(IPin* pSource,
+                                           tInt nEventCode,
+                                           tInt nParam1,
+                                           tInt nParam2,
+                                           IMediaSample* pMediaSample)
+{
+    // first check what kind of event it is
+	if (nEventCode == IPinEventSink::PE_MediaSampleReceived) {
+		// so we received a media sample, so this pointer better be valid.
+    	RETURN_IF_POINTER_NULL(pMediaSample);
+
+		if (&m_iStartTurning == pSource) {
+			
+			tInt32 mode = -1;
+			tInt32 type = -1;
+			tBool giveWay = tTrue;
+
+			{
+				__adtf_sample_read_lock_mediadescription(m_pStartTurningInput ,pMediaSample, pCoder);    
+				if (!m_bIDsStartTurningSet) {								  
+					pCoder->GetID("mode", m_szIDModeStartTurningInput);
+					pCoder->GetID("type", m_szIDTypeStartTurningInput);
+					pCoder->GetID("giveWay", m_szIDGiveWayStartTurningInput);
+					pCoder->GetID("ui32ArduinoTimestamp",  m_szIDTimestampStartTurningInput);
+				}
+  		
+				pCoder->Get(m_szIDModeStartTurningInput, (tVoid*)&mode);  
+				pCoder->Get(m_szIDModeStartTurningInput, (tVoid*)&type);
+				pCoder->Get(m_szIDModeStartTurningInput, (tVoid*)&giveWay);
+							
+
+				m_turningMode = turningModeLookup[type][mode][giveWay];     
+			}
+
+		} else if (&m_iUltraSonic == pSource && m_turningMode!=0) {
+
+			tSignalValue frontLeft, frontCenterLeft, frontCenter, frontCenterRight, frontRight;
+
+			{
+				__adtf_sample_read_lock_mediadescription(m_pUltraSonicInput, pMediaSample, pCoder);    
+				
+				if (!m_bIDsUltraSonicSet) {						  
+					pCoder->GetID("tFrontLeft", m_szIDFrontLeftUltraSonicInput);
+					pCoder->GetID("tFrontCenterLeft", m_szIDFrontCenterLeftUltraSonicInput);
+					pCoder->GetID("tFrontCenter", m_szIDFrontCenterUltraSonicInput);
+					pCoder->GetID("tFrontCenterRight", m_szIDFrontCenterRightUltraSonicInput);
+					pCoder->GetID("tFrontRight", m_szIDFrontRightUltraSonicInput);
+					m_bIDsUltraSonicSet=tTrue;
+				}
+
+  				pCoder->Get(m_szIDFrontLeftUltraSonicInput, (tVoid*)&frontLeft); 
+  				pCoder->Get(m_szIDFrontCenterLeftUltraSonicInput, (tVoid*)&frontCenterLeft);   
+  				pCoder->Get(m_szIDFrontCenterUltraSonicInput, (tVoid*)&frontCenter);   
+  				pCoder->Get(m_szIDFrontCenterRightUltraSonicInput, (tVoid*)&frontCenterRight);   
+  				pCoder->Get(m_szIDFrontRightUltraSonicInput, (tVoid*)&frontRight);    
+			}
+
+			fstream fs;
+			fs.open("USstruct.dat", ios::out|ios::app);
+			fs << frontLeft.f32Value << " " << frontCenterLeft.f32Value << " " << frontCenter.f32Value << " "  << frontCenterRight.f32Value << " "  << frontRight.f32Value << "\n";
+			fs.close();
+
+			/*m_ultraSonicDataStruct.tFrontLeft = frontLeft;
+			m_ultraSonicDataStruct.tFrontCenterLeft = frontCenterLeft;
+			m_ultraSonicDataStruct.tFrontCenter = frontCenter;
+			m_ultraSonicDataStruct.tFrontCenterRight = frontCenterRight;
+			m_ultraSonicDataStruct.tFrontRight = frontRight;*/
+			
+			switch (m_turningMode) {
+				case 1: 
+					if (frontLeft.f32Value>1.10 && frontCenterLeft.f32Value>1.70 && frontCenter.f32Value>1.15 && frontCenterRight.f32Value>1.15) { // eventuell noch ganz rechten
+						m_turningManeuvre = TURN_LEFT;	
+					}
+					break;
+				case 2: 
+					if (frontLeft.f32Value>1.10 && frontCenterLeft.f32Value>0.60 && frontCenter.f32Value>1.15 && frontCenterRight.f32Value>1.15) {
+						m_turningManeuvre = STRAIGHT_ON;	
+					}
+					break;
+				case 3: 
+					if (frontLeft.f32Value>1.10 && frontCenterLeft.f32Value>0.60 && frontCenterRight.f32Value>0.50 && frontRight.f32Value>0.60) {
+						m_turningManeuvre = TURN_RIGHT;	
+					}
+					break;
+				case 4: 
+					if (frontCenterLeft.f32Value>1.70 && frontCenter.f32Value>1.15) {
+						m_turningManeuvre = TURN_LEFT;	
+					}
+					break;
+				case 5: 
+					if (frontCenter.f32Value>1.15) {
+						m_turningManeuvre = STRAIGHT_ON;	
+					}
+					break;
+				case 6: 
+					if (frontCenterRight.f32Value>0.50 && frontRight.f32Value>0.60) {
+						m_turningManeuvre = TURN_RIGHT;	
+					}
+					break;
+				case 7: 
+					if (frontLeft.f32Value>0.50 && frontCenterLeft.f32Value>1.70 && frontCenter.f32Value>1.15 && frontCenterRight.f32Value>1.15) {
+						m_turningManeuvre = STRAIGHT_ON;	
+					}
+					break;
+				case 8: 
+					if (frontLeft.f32Value>0.50 && frontCenterLeft.f32Value>1.70 && frontCenter.f32Value>0.4 && frontCenterRight.f32Value>0.5 && frontRight.f32Value>0.6) {
+						m_turningManeuvre = TURN_RIGHT;	
+					}
+					break;
+				case 9: 
+					if (frontLeft.f32Value>1.10 && frontCenterLeft.f32Value>1.00 && frontCenter.f32Value>1.15 && frontCenterRight.f32Value>1.15) { //eventuell noch ganz rechten
+						m_turningManeuvre = TURN_LEFT;	
+					}
+					break;
+				case 10: 
+					if ( frontCenterLeft.f32Value>1.00 && frontCenter.f32Value>1.1) { //eventuell frontCenterLeft raus
+						m_turningManeuvre = TURN_LEFT;	
+					}
+					break;
+				case 11:
+					if (frontLeft.f32Value>1.10 && frontCenterLeft.f32Value>1.70 && frontCenter.f32Value>1.15 ) {
+						m_turningManeuvre = TURN_LEFT;	
+					} 
+					break;
+				case 12: 
+					if (frontLeft.f32Value>1.10 && frontCenter.f32Value>1.15) {
+						m_turningManeuvre = STRAIGHT_ON;	
+					}
+					break;
+			
+			}
+			
+			//turning(tTrue,mode);
+
+		}
+	}
+
+    
+
+    RETURN_NOERROR;
+}
+
+
+tResult TurningFilter::TransmitBoolValue(cOutputPin* oPin, bool value)
+{
+    cObjectPtr<IMediaSample> pMediaSample;
+    AllocMediaSample((tVoid**)&pMediaSample);
+
+    //allocate memory with the size given by the descriptor
+    cObjectPtr<IMediaSerializer> pSerializer;
+    m_pDescriptionBool->GetMediaSampleSerializer(&pSerializer);
+    pMediaSample->AllocBuffer(pSerializer->GetDeserializedSize());
+
+    tBool bValue = value;
+    tUInt32 ui32TimeStamp = 0;
+
+    //write date to the media sample with the coder of the descriptor
+    {
+        __adtf_sample_write_lock_mediadescription(m_pDescriptionBool, pMediaSample, pCoderOutput);    
+
+        // set the id if not already done
+        if(!m_bIDsBoolValueOutput)
+        {
+            pCoderOutput->GetID("bValue", m_szIDBoolValueOutput);
+            pCoderOutput->GetID("ui32ArduinoTimestamp", m_szIDArduinoTimestampOutput);
+            m_bIDsBoolValueOutput = tTrue;
+        }      
+
+        // set value from sample
+        pCoderOutput->Set(m_szIDBoolValueOutput, (tVoid*)&bValue);     
+        pCoderOutput->Set(m_szIDArduinoTimestampOutput, (tVoid*)&(ui32TimeStamp));     
+    }
+
+    pMediaSample->SetTime(_clock->GetStreamTime());
+
+    //transmit media sample over output pin
+    oPin->Transmit(pMediaSample);
+
+    RETURN_NOERROR;
+}
+

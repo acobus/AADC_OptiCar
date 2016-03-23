@@ -1,0 +1,20 @@
+<adtf:export xmlns:adtf="adtf">
+ <folder name="OpenChallenge">
+  <folder name="components">
+   <folder name="FilterTraceView" />
+  </folder>
+  <folder name="windows">
+   <folder Height="603" PosX="589" PosY="0" Visible="true" Width="1086" name="Video_Display" />
+   <folder Height="586" PosX="20" PosY="12" Visible="true" Width="704" name="Video_Display2" />
+   <folder Height="780" PosX="82" PosY="553" Visible="true" Width="1216" name="Signal_View" />
+  </folder>
+ </folder>
+ <folder name="PLAYER">
+  <folder name="components">
+   <folder name="FilterTraceView" />
+  </folder>
+  <folder name="windows">
+   <folder Height="684" Visible="true" Width="1046" name="Video_Display" />
+  </folder>
+ </folder>
+</adtf:export>

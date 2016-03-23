@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="iso-8859-1" standalone="no"?>
+<adtf:project xmlns:adtf="adtf">
+ <general_settings>
+  <property name="active_configuration" type="String" value="OpenChallenge" />
+  <property name="media_description_files" type="String" value="./../description/*.description;./../addons/*/description/*.description;./../src/examples/src/description/*.description;../../../../description/*.description/*.*;../../../description/aadc.description" />
+  <property name="media_description_enable_provide_signals" type="Bool" value="true" />
+  <property name="enable_messagebus" type="Bool" value="true" />
+ </general_settings>
+ <configurations>
+  <configuration description="" name="OpenChallenge">
+   <graph>
+    <filter alias="AADC_Watchdog_Trigger" idref="adtf.aadc.watchdogTrigger" priority="2" />
+    <subgraph alias="Base_Config" idref="Base_Config" priority="1" />
+    <connection connection_priority="50" dest="Base_Config.Watchdog_Alive_Flag" interface="" source="AADC_Watchdog_Trigger.WatchdogAliveSignal" />
+    <filter alias="CalcAreaFilter" idref="adtf.aadc.aadc_calcAreaFilter" priority="3" />
+    <filter alias="LineTracking" idref="adtf.line_tracking" priority="4">
+     <settings>
+      <property name="Common::Show Debug" type="Bool" value="true" />
+      <property name="LaneDetection::Near area::Near Line" type="Int" value="300" />
+      <property name="Common::Drive Time in milliseconds" type="Int" value="0" />
+      <property name="Common::Enable Lightbeam Trigger" type="Bool" value="true" />
+      <property name="LongitudinalControl::Max Acceleration" type="Float" value="1.0" />
+      <property name="LT::ImagecutHeightDownHough" type="Int" value="300" />
+      <property name="LT::ThresholdValueHough" type="Float" value="110.0" />
+      <property name="LaneDetection::ThresholdValue" type="Int" value="200" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Xtion_Camera" idref="adtf.aadc.aadc_xtionCamera" priority="5">
+     <settings>
+      <property name="Configuration File" type="String" value="../../../configuration_files/xtionSettings.xml" />
+     </settings>
+    </filter>
+    <filter alias="Undistort" idref="adtf.example.undistort" priority="6" />
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="7">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+      <property name="active" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Undistort.Image_Dist" interface="" source="AADC_Xtion_Camera.Video_RGB" />
+    <connection connection_priority="50" dest="LineTracking.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="Video_Display.gcl_input" interface="" source="LineTracking.GLC_Output" />
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="Undistort.Image_Undist" />
+    <filter alias="AADC_Calibration_XML" idref="adtf.aadc.aadc_calibrationXML" priority="8">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../src/aadcUser/calibration/calibrationSpeedActuator_eigene_neu.xml" />
+     </settings>
+    </filter>
+    <filter alias="AADC_Calibration_XML2" idref="adtf.aadc.aadc_calibrationXML" priority="9">
+     <settings>
+      <property name="Configuration File For Interpolation" type="String" value="../../../configuration_files/SteeringActuatorLaneTracking.xml" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="LineTracking.Acceleration" />
+    <connection connection_priority="50" dest="Base_Config.SpeedController" interface="" source="AADC_Calibration_XML.output_value" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML2.input_value" interface="" source="LineTracking.Steering_Angle" />
+    <connection connection_priority="50" dest="Base_Config.SteeringController" interface="" source="AADC_Calibration_XML2.output_value" />
+    <filter alias="Harddisk_Recorder" idref="adtf.stg.harddisk_recorder" priority="10">
+     <settings>
+      <property name="filename" type="String" value="OCDriving.dat" />
+      <property name="start_on_startup" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Harddisk_Recorder.Image_Undist" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="Harddisk_Recorder.GLC_LiT" interface="" source="LineTracking.GLC_Output" />
+    <filter alias="Tick_Filter_OC" idref="adtf.aadc.aadc_tickFilterOC" priority="11" />
+    <connection connection_priority="50" dest="Tick_Filter_OC.WheelLeft_Struct" interface="" source="Base_Config.WheelLeft_Struct" />
+    <connection connection_priority="50" dest="Tick_Filter_OC.WheelRight_Struct" interface="" source="Base_Config.WheelRight_Struct" />
+    <connection connection_priority="50" dest="CalcAreaFilter" interface="" source="Tick_Filter_OC.distance_overall" />
+    <filter alias="OC_Marker_Detection_Filter" idref="adtf.OCmarkerDetection" priority="12">
+     <settings>
+      <property name="Calibration File for used Camera" type="String" value="../../../configuration_files/xtionIntrinsicCalib.yml" />
+      <property name="Dictionary File For Markers" type="String" value="../../../configuration_files/OCroadsign.yml" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="CalcAreaFilter.Start" interface="" source="LineTracking.Start_Calc_Area" />
+    <connection connection_priority="50" dest="Tick_Filter_OC.Start" interface="" source="CalcAreaFilter.startTickFilter" />
+    <connection connection_priority="50" dest="OC_Marker_Detection_Filter.Video_RGB_input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="LineTracking.start" interface="" source="OC_Marker_Detection_Filter.Start_Driving" />
+    <connection connection_priority="50" dest="CalcAreaFilter.ShowResult" interface="" source="OC_Marker_Detection_Filter.Start_Scale" />
+    <connection connection_priority="50" dest="Tick_Filter_OC.Start" interface="" source="OC_Marker_Detection_Filter.Start_Driving" />
+    <connection connection_priority="50" dest="Tick_Filter_OC.Start" interface="" source="OC_Marker_Detection_Filter.Start_Scale" />
+    <connection connection_priority="50" dest="LineTracking.Distance_overall" interface="" source="Tick_Filter_OC.distance_overall" />
+    <filter alias="ScaleTracking" idref="adtf.Scale_tracking" priority="12">
+     <settings>
+      <property name="Common::Drive Time in milliseconds" type="Int" value="0" />
+      <property name="Common::Show Debug" type="Bool" value="true" />
+      <property name="LaneDetection::Near area::Near Line" type="Int" value="300" />
+      <property name="LaneDetection::ThresholdValue" type="Int" value="200" />
+      <property name="LongitudinalControl::Max Acceleration" type="Float" value="1.0" />
+      <property name="LT::ImagecutHeightDownHough" type="Int" value="300" />
+      <property name="LT::ThresholdValueHough" type="Float" value="110.0" />
+      <property name="Common::Enable Lightbeam Trigger" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display2" idref="adtf.visual.video_display" priority="12">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="ScaleTracking.CurrentVelocity" interface="" source="CalcAreaFilter.speed" />
+    <connection connection_priority="50" dest="Video_Display2.gcl_input" interface="" source="ScaleTracking.GLC_Output" />
+    <connection connection_priority="50" dest="ScaleTracking.Video_Input" interface="" source="Undistort.Image_Undist" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML.input_value" interface="" source="ScaleTracking.Acceleration" />
+    <connection connection_priority="50" dest="AADC_Calibration_XML2.input_value" interface="" source="ScaleTracking.Steering_Angle" />
+    <connection connection_priority="50" dest="Video_Display2.input" interface="" source="Undistort.Image_Undist" />
+    <filter alias="Signal_View" idref="adtf.ui.signal_view" priority="13" />
+   </graph>
+  </configuration>
+  <configuration description="" name="PLAYER">
+   <graph>
+    <filter alias="Harddisk_Player" idref="adtf.stg.harddisk_player" priority="1">
+     <settings>
+      <property name="filename" type="String" value="./OCDriving_006.dat" />
+     </settings>
+    </filter>
+    <filter alias="Video_Display" idref="adtf.visual.video_display" priority="2">
+     <settings>
+      <property name="ScaleGCL" type="Bool" value="true" />
+     </settings>
+    </filter>
+    <connection connection_priority="50" dest="Video_Display.input" interface="" source="Harddisk_Player.Image_Undist" />
+    <connection connection_priority="50" dest="Video_Display.gcl_input" interface="" source="Harddisk_Player.GLC_LiT" />
+   </graph>
+  </configuration>
+ </configurations>
+ <fileinfo adtfversion="2.13.1" configversion="1.3" />
+ <configuration_settings />
+ <plugins>
+  <plugin optional="true" url="../../../bin/Linux/gcc/$(BUILD_TYPE_2)/*.plb" />
+  <plugin optional="true" url="../../../bin/Windows/vc10/$(BUILD_TYPE_2)/*.plb" />
+ </plugins>
+ <adtf_include source="../../BaseConfig/IncludeConfig.xml" />
+</adtf:project>
